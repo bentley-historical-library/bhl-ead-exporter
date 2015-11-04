@@ -37,7 +37,9 @@ class EADSerializer < ASpaceExport::Serializer
     content = content.gsub("<br>", "<br/>").gsub("</br>", '')
     # lets break the text, if it has linebreaks but no p tags.  
     
-    if allow_p 
+    if allow_p == "neither"
+        content = content
+    elsif allow_p
       content = handle_linebreaks(content) 
     else
       content = strip_p(content)
@@ -348,7 +350,7 @@ class EADSerializer < ASpaceExport::Serializer
           xml.head { sanitize_mixed_content(title, xml, fragments) }  if title
 
           sn['items'].each do |item|
-            xml.item { sanitize_mixed_content(item,xml, fragments)} 
+            xml.item { sanitize_mixed_content(item,xml, fragments, allow_p = "neither")} 
           end
         }
       when 'note_definedlist'
