@@ -1,6 +1,8 @@
 require 'nokogiri'
 require 'securerandom'
 
+require_relative 'lib/descgrp_types'
+
 class EADSerializer < ASpaceExport::Serializer
   serializer_for :ead
 
@@ -138,11 +140,19 @@ class EADSerializer < ASpaceExport::Serializer
                 serialize_digital_object(dob, xml, @fragments)
           end
 
+          # MODIFICATION: Serialize <descgrp type="admin">
+
+          xml.descgrp({'type'=>'admin'}) {
+            serialize_descgrp_admin_notes(data, xml, @fragments,level="resource")
+          }
+
+
+
           serialize_nondid_notes(data, xml, @fragments, level="resource")
 
           serialize_bibliographies(data, xml, @fragments)
 
-          serialize_indexes(data, xml, @fragments)
+          
 
           serialize_controlaccess(data, xml, @fragments)
 
@@ -155,6 +165,13 @@ class EADSerializer < ASpaceExport::Serializer
                        }
                        )
             end
+          }
+
+          # MODIFICATION: Serialize <descgrp type="add">
+
+          xml.descgrp({'type'=>'add'}) {
+            serialize_descgrp_add_notes(data, xml, @fragments,level="resource")
+            serialize_indexes(data, xml, @fragments)
           }
         }
       }
@@ -567,12 +584,37 @@ class EADSerializer < ASpaceExport::Serializer
     end
   end
 
+  # MODIFICATION: Put some notes in <descgrp type="admin">
+  def serialize_descgrp_admin_notes(data, xml, fragments, level)
+    data.notes.each do |note|
+      next if note["publish"] === false && !@include_unpublished
+      next if note["internal"]
+      next if note['type'].nil?
+      next unless DescgrpTypes.descgrp_admin.include?(note['type'])
+      serialize_note_content(note,xml,fragments,level)
+    end
+  end
+
+  # MODIFICATION: Put some other notes in <descgrp type="add">
+  def serialize_descgrp_add_notes(data, xml, fragments, level)
+    data.notes.each do |note|
+      next if note["publish"] === false && !@include_unpublished
+      next if note["internal"]
+      next if note['type'].nil?
+      next unless DescgrpTypes.descgrp_add.include?(note['type'])
+      serialize_note_content(note,xml,fragments,level)
+    end
+  end
+
   # MODIFICATION: Pass along the note's level to send to serialize_note_content to differentiate resource and component level accessrestricts
+  # MODIFICATION: Only serialize notes that do not belong in <descgrp type="admin"> or <descgrp type="add">
   def serialize_nondid_notes(data, xml, fragments, level)
     data.notes.each do |note|
       next if note["publish"] === false && !@include_unpublished
       next if note['internal']
       next if note['type'].nil?
+      next if DescgrpTypes.descgrp_admin.include?(note['type'])
+      next if DescgrpTypes.descgrp_add.include?(note['type'])
       next unless data.archdesc_note_types.include?(note['type'])
       audatt = note["publish"] === false ? {:audience => 'internal'} : {}
       if note['type'] == 'legalstatus'
@@ -708,14 +750,14 @@ class EADSerializer < ASpaceExport::Serializer
                 xml.addressline { sanitize_mixed_content( line, xml, fragments) }  
               end
               if data.repo.url 
-              	xml.addressline ( "URL: " ) { 
-              	  xml.extptr ( { 
-              	  				"href" => data.repo.url,
-              	  				"title" => data.repo.url,
-              	  				"show" => "new"
+                xml.addressline ( "URL: " ) { 
+                  xml.extptr ( { 
+                          "href" => data.repo.url,
+                          "title" => data.repo.url,
+                          "show" => "new"
                                 # MODIFICATION: Removed 'type' attribute
-              	  				} )
-              	 }
+                          } )
+                 }
               end
             }
           end
