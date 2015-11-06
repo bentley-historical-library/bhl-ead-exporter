@@ -39,6 +39,9 @@ class EADSerializer < ASpaceExport::Serializer
     content = content.gsub("<br>", "<br/>").gsub("</br>", '')
     # lets break the text, if it has linebreaks but no p tags.  
     
+    # MODIFICATION: Added a sort of hacky way to preserve <p> tags in lists
+    # allow_p = true adds ps where they shouldn't be, and allow_p = false removes ps where it shouldn't
+    # allow_p = "neither" leaves everything just the way it is. Currently only used in list/items
     if allow_p == "neither"
         content = content
     elsif allow_p
@@ -128,6 +131,8 @@ class EADSerializer < ASpaceExport::Serializer
 
             serialize_dates(data, xml, @fragments)
 
+             # MODIFICATION: Set serialize_x_notes levels to resource so that extptrs are added to accessrestrict and processinfo
+
             serialize_did_notes(data, xml, @fragments, level="resource")
 
             data.instances_with_containers.each do |instance|
@@ -147,12 +152,10 @@ class EADSerializer < ASpaceExport::Serializer
           }
 
 
-
           serialize_nondid_notes(data, xml, @fragments, level="resource")
 
           serialize_bibliographies(data, xml, @fragments)
 
-          
 
           serialize_controlaccess(data, xml, @fragments)
 
@@ -235,6 +238,7 @@ class EADSerializer < ASpaceExport::Serializer
         serialize_origination(data, xml, fragments)
         serialize_extents(data, xml, fragments)
         serialize_dates(data, xml, fragments)
+        # MODIFICATION: Set serialize_x_notes level to "child" so that extptrs are not added to accessrestrict or processinfo
         serialize_did_notes(data, xml, fragments, level="child")
 
         # TODO: Clean this up more; there's probably a better way to do this.
@@ -365,6 +369,8 @@ class EADSerializer < ASpaceExport::Serializer
         atts = {:type => 'ordered', :numeration => sn['enumeration']}.reject{|k,v| v.nil? || v.empty? || v == "null" }.merge(audatt)
         xml.list(atts) {
           xml.head { sanitize_mixed_content(title, xml, fragments) }  if title
+
+          # MODIFCATION: Set allow_p to "neither" for list/items so that ps are not added or removed
 
           sn['items'].each do |item|
             xml.item { sanitize_mixed_content(item,xml, fragments, allow_p = "neither")} 
