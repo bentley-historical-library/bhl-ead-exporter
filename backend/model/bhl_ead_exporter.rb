@@ -178,10 +178,20 @@ class EADSerializer < ASpaceExport::Serializer
 
           # MODIFICATION: Serialize <descgrp type="add">
 
-          xml.descgrp({'type'=>'add'}) {
-            serialize_descgrp_add_notes(data, xml, @fragments,level="resource")
-            serialize_indexes(data, xml, @fragments)
-          }
+          descgrp_add = false
+
+          data.notes.each do |note|
+            if DescgrpTypes.descgrp_add.include?(note['type'])
+              descgrp_add = true
+            end
+          end
+
+          if descgrp_add
+            xml.descgrp({'type'=>'add'}) {
+              serialize_descgrp_add_notes(data, xml, @fragments,level="resource")
+              serialize_indexes(data, xml, @fragments)
+            }
+          end
         }
       }
     
