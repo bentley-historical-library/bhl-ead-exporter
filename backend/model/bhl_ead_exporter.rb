@@ -2,6 +2,7 @@ require 'nokogiri'
 require 'securerandom'
 
 require_relative 'lib/descgrp_types'
+require_relative 'lib/resolve_classifications'
 
 class EADSerializer < ASpaceExport::Serializer
   serializer_for :ead
@@ -79,6 +80,8 @@ class EADSerializer < ASpaceExport::Serializer
         xml.text (
           @stream_handler.buffer { |xml, new_fragments|
             serialize_eadheader(data, xml, new_fragments)
+           # MODIFICATION: Serialize frontmatter for DLXS
+            serialize_frontmatter(data, xml, new_fragments)
           })
 
         atts = {:level => data.level, :otherlevel => data.other_level}
@@ -92,6 +95,9 @@ class EADSerializer < ASpaceExport::Serializer
         end
 
         atts.reject! {|k, v| v.nil?}
+
+
+        
 
         xml.archdesc(atts) {
             
@@ -690,6 +696,33 @@ class EADSerializer < ASpaceExport::Serializer
     end
   end
 
+  # MODIFICATION: Serialize frontmatter for DLXS
+
+  def serialize_frontmatter(data, xml, fragments)
+    xml.frontmatter {
+      xml.titlepage {
+        classification_ref = nil
+        classification_title = nil
+
+        data.classifications.each do |classification|
+          classification_ref = classification['ref']
+        end
+
+        if classification_ref
+          classification_title = resolve_classification(classification_ref)
+        end
+
+        publisher = ""
+        publisher += "#{classification_title} <lb/>" if classification_title
+        publisher += data.repo.name + " <lb/>University of Michigan"
+
+        xml.publisher { sanitize_mixed_content(publisher, xml, fragments) }
+        xml.titleproper { sanitize_mixed_content(data.finding_aid_title, xml, fragments) }
+        xml.author { sanitize_mixed_content(data.finding_aid_author, xml, fragments) }  unless data.finding_aid_author.nil?
+        }
+     }
+
+  end
 
   def serialize_eadheader(data, xml, fragments)
     eadheader_atts = {:findaidstatus => data.finding_aid_status,
