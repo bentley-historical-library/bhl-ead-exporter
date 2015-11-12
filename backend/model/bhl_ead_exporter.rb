@@ -452,7 +452,7 @@ class EADSerializer < ASpaceExport::Serializer
     end
     atts['title'] = digital_object['title'] if digital_object['title']
         
-    #MODIFICATION: Inserted original note into <daodesc> 
+    #MODIFICATION: Insert original note into <daodesc> instead of the default title
     daodesc_content = nil
     
     digital_object_notes.each do |note|
@@ -460,6 +460,8 @@ class EADSerializer < ASpaceExport::Serializer
             daodesc_content = note['content'][0]
         end
     end
+
+    daodesc_content = daodesc_content || '[View Item]'
     
     
     if file_versions.empty?
@@ -467,15 +469,21 @@ class EADSerializer < ASpaceExport::Serializer
       atts['actuate'] = 'onrequest'
       atts['show'] = 'new'
       xml.dao(atts) {
-        xml.daodesc{ sanitize_mixed_content(daodesc_content, xml, fragments, true) } if content
+        xml.daodesc { 
+          # MODIFICATION: Wrap the daodesc content in a <p> tag
+          xml.p { sanitize_mixed_content(daodesc_content, xml, fragments, true) }
+        }
       }
     else
       file_versions.each do |file_version|
         atts['href'] = file_version['file_uri'] || digital_object['digital_object_id']
+        # MODIFICATION: downcase xlink_actuate_attribute
         atts['actuate'] = file_version['xlink_actuate_attribute'].downcase || 'onrequest'
         atts['show'] = file_version['xlink_show_attribute'] || 'new'
         xml.dao(atts) {
-          xml.daodesc{ sanitize_mixed_content(daodesc_content, xml, fragments, true) } if content
+          xml.daodesc { 
+            xml.p { sanitize_mixed_content(daodesc_content, xml, fragments, true) }
+          }
         }
       end
     end
