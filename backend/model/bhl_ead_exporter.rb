@@ -131,7 +131,8 @@ class EADSerializer < ASpaceExport::Serializer
 
             serialize_origination(data, xml, @fragments)
 
-            xml.unitid (0..3).map{|i| data.send("id_#{i}")}.compact.join('.')
+            # MODIFICATION: Add a type="call number" attribute to collection level unitids
+            xml.unitid(:type => 'call number') { xml.text (0..3).map{|i| data.send("id_#{i}")}.compact.join('.')}
 
             serialize_extents(data, xml, @fragments)
 
@@ -415,8 +416,10 @@ class EADSerializer < ASpaceExport::Serializer
       next unless inst['container'].has_key?("type_#{n}") && inst['container'].has_key?("indicator_#{n}")
       @container_id = prefix_id(SecureRandom.hex) 
       
-      atts[:parent] = @parent_id unless @parent_id.nil? 
-      atts[:id] = @container_id 
+      # MODIFICATION: Comment out container parent and id attributes.
+      # NOTE: If you are using the container management plugin, this will need to be done in container_management/backend/model/mixins/serialize_extra_container_values
+      #atts[:parent] = @parent_id unless @parent_id.nil? 
+      #atts[:id] = @container_id 
       @parent_id = @container_id 
 
       atts[:type] = inst['container']["type_#{n}"]
@@ -470,8 +473,7 @@ class EADSerializer < ASpaceExport::Serializer
       atts['show'] = 'new'
       xml.dao(atts) {
         xml.daodesc { 
-          # MODIFICATION: Wrap the daodesc content in a <p> tag
-          xml.p { sanitize_mixed_content(daodesc_content, xml, fragments, true) }
+          sanitize_mixed_content(daodesc_content, xml, fragments, true)
         }
       }
     else
@@ -482,7 +484,7 @@ class EADSerializer < ASpaceExport::Serializer
         atts['show'] = file_version['xlink_show_attribute'] || 'new'
         xml.dao(atts) {
           xml.daodesc { 
-            xml.p { sanitize_mixed_content(daodesc_content, xml, fragments, true) }
+              sanitize_mixed_content(daodesc_content, xml, fragments, true)
           }
         }
       end
