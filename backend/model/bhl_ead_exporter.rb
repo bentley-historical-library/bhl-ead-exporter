@@ -131,7 +131,8 @@ class EADSerializer < ASpaceExport::Serializer
 
             serialize_origination(data, xml, @fragments)
 
-            xml.unitid (0..3).map{|i| data.send("id_#{i}")}.compact.join('.')
+            # MODIFICATION: Add a type="call number" attribute to collection level unitids
+            xml.unitid(:type => 'call number') { xml.text (0..3).map{|i| data.send("id_#{i}")}.compact.join('.')}
 
             serialize_extents(data, xml, @fragments)
 
@@ -415,8 +416,10 @@ class EADSerializer < ASpaceExport::Serializer
       next unless inst['container'].has_key?("type_#{n}") && inst['container'].has_key?("indicator_#{n}")
       @container_id = prefix_id(SecureRandom.hex) 
       
-      atts[:parent] = @parent_id unless @parent_id.nil? 
-      atts[:id] = @container_id 
+      # MODIFICATION: Comment out container parent and id attributes.
+      # NOTE: If you are using the container management plugin, this will need to be done in container_management/backend/model/mixins/serialize_extra_container_values
+      #atts[:parent] = @parent_id unless @parent_id.nil? 
+      #atts[:id] = @container_id 
       @parent_id = @container_id 
 
       atts[:type] = inst['container']["type_#{n}"]
@@ -452,7 +455,7 @@ class EADSerializer < ASpaceExport::Serializer
     end
     atts['title'] = digital_object['title'] if digital_object['title']
         
-    #MODIFICATION: Inserted original note into <daodesc> 
+    #MODIFICATION: Insert original note into <daodesc> instead of the default title
     daodesc_content = nil
     
     digital_object_notes.each do |note|
@@ -460,6 +463,8 @@ class EADSerializer < ASpaceExport::Serializer
             daodesc_content = note['content'][0]
         end
     end
+
+    daodesc_content = daodesc_content || '[View Item]'
     
     
     if file_versions.empty?
@@ -467,15 +472,20 @@ class EADSerializer < ASpaceExport::Serializer
       atts['actuate'] = 'onrequest'
       atts['show'] = 'new'
       xml.dao(atts) {
-        xml.daodesc{ sanitize_mixed_content(daodesc_content, xml, fragments, true) } if content
+        xml.daodesc { 
+          sanitize_mixed_content(daodesc_content, xml, fragments, true)
+        }
       }
     else
       file_versions.each do |file_version|
         atts['href'] = file_version['file_uri'] || digital_object['digital_object_id']
+        # MODIFICATION: downcase xlink_actuate_attribute
         atts['actuate'] = file_version['xlink_actuate_attribute'].downcase || 'onrequest'
         atts['show'] = file_version['xlink_show_attribute'] || 'new'
         xml.dao(atts) {
-          xml.daodesc{ sanitize_mixed_content(daodesc_content, xml, fragments, true) } if content
+          xml.daodesc { 
+              sanitize_mixed_content(daodesc_content, xml, fragments, true)
+          }
         }
       end
     end
