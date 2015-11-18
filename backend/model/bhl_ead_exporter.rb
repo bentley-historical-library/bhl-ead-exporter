@@ -472,9 +472,7 @@ class EADSerializer < ASpaceExport::Serializer
       atts['actuate'] = 'onrequest'
       atts['show'] = 'new'
       xml.dao(atts) {
-        xml.daodesc { 
-          sanitize_mixed_content(daodesc_content, xml, fragments, true)
-        }
+        xml.daodesc { sanitize_mixed_content(daodesc_content, xml, fragments, true) } if content
       }
     else
       file_versions.each do |file_version|
@@ -483,9 +481,7 @@ class EADSerializer < ASpaceExport::Serializer
         atts['actuate'] = file_version['xlink_actuate_attribute'].downcase || 'onrequest'
         atts['show'] = file_version['xlink_show_attribute'] || 'new'
         xml.dao(atts) {
-          xml.daodesc { 
-              sanitize_mixed_content(daodesc_content, xml, fragments, true)
-          }
+          xml.daodesc { sanitize_mixed_content(daodesc_content, xml, fragments, true) } if content
         }
       end
     end
