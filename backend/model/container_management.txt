@@ -1,0 +1,8 @@
+This describes changes that need to be made to container_management/backend/model/mixins/serialize_extra_container_values.rb
+Once the container management plugin is integrated into the core code, these changes could presumably be made to the bhl_ead_exporter
+
+
+1. Do not export parent or id attributes
+2. Export altrender as a type attribute for n == 1
+3. Export type_n.downcase as a type attribute for n == 2 and n == 3
+4. Export type_n as a label attribute for n == 2 and n == 3
