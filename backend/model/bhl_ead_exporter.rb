@@ -488,26 +488,35 @@ class EADSerializer < ASpaceExport::Serializer
     
   end
 
-
+  # MODIFCATION: Assemble a single extent statement in one physdesc
+  # Consider modifying this to export separate collection level physdescs
   def serialize_extents(obj, xml, fragments)
+    extent_statements = []
     if obj.extents.length
       obj.extents.each do |e|
         next if e["publish"] === false && !@include_unpublished
         audatt = e["publish"] === false ? {:audience => 'internal'} : {}
-        xml.physdesc({:altrender => e['portion']}.merge(audatt)) {
-          if e['number'] && e['extent_type']
-            xml.extent({:altrender => 'materialtype spaceoccupied'}) {
-              sanitize_mixed_content("#{e['number']} #{I18n.t('enumerations.extent_extent_type.'+e['extent_type'], :default => e['extent_type'])}", xml, fragments)  
-            }
-          end
-          if e['container_summary']
-            xml.extent({:altrender => 'carrier'}) {
-              sanitize_mixed_content( e['container_summary'], xml, fragments)
-            }
-          end
-          xml.physfacet { sanitize_mixed_content(e['physical_details'],xml, fragments) } if e['physical_details']
-          xml.dimensions  {   sanitize_mixed_content(e['dimensions'],xml, fragments) }  if e['dimensions']
+        extent_statement = ''
+        extent_number_and_type = "#{e['number']} #{e['extent_type']}" if e['number'] && e['extent_type']
+        physical_details = []
+        physical_details << e['container_summary'] if e['container_summary']
+        physical_details << e['physical_details'] if e['physical_details']
+        physical_details << e['dimensions'] if e['dimensions']
+        physical_detail = physical_details.join('; ')
+        if extent_number_and_type && physical_details.length > 0
+          extent_statement += extent_number_and_type + ' (' + physical_detail + ')'
+        else
+          extent_statement += extent_number_and_type
+        end
+        extent_statements << extent_statement
+      end
+    
+    if extent_statements.length > 0
+        xml.physdesc {
+            xml.extent {
+              sanitize_mixed_content(extent_statements.join(', '), xml, fragments)  
         }
+      }
       end
     end
   end
@@ -557,13 +566,16 @@ class EADSerializer < ASpaceExport::Serializer
 
     atts = {:id => prefix_id(note['persistent_id']) }.reject{|k,v| v.nil? || v.empty? || v == "null" }.merge(audatt)
     
-    head_text = note['label'] ? note['label'] : I18n.t("enumerations._note_types.#{note['type']}", :default => note['type'])
+    # MODIFICATION: Only export a head tag if there is a note label to avoid exporting a <head> tag for every single note
+    head_text = note['label'] if note['label'] #? note['label'] : I18n.t("enumerations._note_types.#{note['type']}", :default => note['type'])
     content, head_text = extract_head_text(content, head_text) 
     # MODIFICATION: Add uarpacc extptr for resource level accessrestricts
     if note['type'] == 'accessrestrict'    
         if level == 'resource'
             xml.accessrestrict(atts) {
+                if head_text
                 xml.head { sanitize_mixed_content(head_text, xml, fragments) } unless ASpaceExport::Utils.headless_note?(note['type'], content ) 
+                end
                 sanitize_mixed_content(content, xml, fragments, ASpaceExport::Utils.include_p?(note['type']) ) if content
                 if note['subnotes']
                     serialize_subnotes(note['subnotes'], xml, fragments, ASpaceExport::Utils.include_p?(note['type']))
@@ -578,7 +590,9 @@ class EADSerializer < ASpaceExport::Serializer
                 }
         elsif level == 'child'
             xml.accessrestrict(atts) {
+                if head_text
                 xml.head { sanitize_mixed_content(head_text, xml, fragments) } unless ASpaceExport::Utils.headless_note?(note['type'], content ) 
+                end
                 sanitize_mixed_content(content, xml, fragments, ASpaceExport::Utils.include_p?(note['type']) ) if content
                 if note['subnotes']
                     serialize_subnotes(note['subnotes'], xml, fragments, ASpaceExport::Utils.include_p?(note['type']))
@@ -588,7 +602,9 @@ class EADSerializer < ASpaceExport::Serializer
     # MODIFICATION: Add digitalproc extptrs to processinfo
     elsif note['type'] == 'processinfo'
         xml.processinfo(atts) {
+            if head_text
             xml.head { sanitize_mixed_content(head_text, xml, fragments) } unless ASpaceExport::Utils.headless_note?(note['type'], content ) 
+            end
             sanitize_mixed_content(content, xml, fragments, ASpaceExport::Utils.include_p?(note['type']) ) if content
             if note['subnotes']
                 serialize_subnotes(note['subnotes'], xml, fragments, ASpaceExport::Utils.include_p?(note['type']))
@@ -603,7 +619,9 @@ class EADSerializer < ASpaceExport::Serializer
             }
     else
         xml.send(note['type'], atts) {
+          if head_text
           xml.head { sanitize_mixed_content(head_text, xml, fragments) } unless ASpaceExport::Utils.headless_note?(note['type'], content ) 
+          end
           sanitize_mixed_content(content, xml, fragments, ASpaceExport::Utils.include_p?(note['type']) ) if content
           if note['subnotes']
             serialize_subnotes(note['subnotes'], xml, fragments, ASpaceExport::Utils.include_p?(note['type']))
@@ -641,8 +659,8 @@ class EADSerializer < ASpaceExport::Serializer
       next if note["publish"] === false && !@include_unpublished
       next if note['internal']
       next if note['type'].nil?
-      next if DescgrpTypes.descgrp_admin.include?(note['type'])
-      next if DescgrpTypes.descgrp_add.include?(note['type'])
+      next if DescgrpTypes.descgrp_admin.include?(note['type']) && level == "resource"
+      next if DescgrpTypes.descgrp_add.include?(note['type']) && level == "resource"
       next unless data.archdesc_note_types.include?(note['type'])
       audatt = note["publish"] === false ? {:audience => 'internal'} : {}
       if note['type'] == 'legalstatus'
@@ -685,8 +703,8 @@ class EADSerializer < ASpaceExport::Serializer
       head_text = nil
       if note['label']
         head_text = note['label']
-      elsif note['type']
-        head_text = I18n.t("enumerations._note_types.#{note['type']}", :default => note['type'])
+      #elsif note['type']
+        #head_text = I18n.t("enumerations._note_types.#{note['type']}", :default => note['type'])
       end
       atts = {:id => prefix_id(note["persistent_id"]) }.reject{|k,v| v.nil? || v.empty? || v == "null" }.merge(audatt)
 
