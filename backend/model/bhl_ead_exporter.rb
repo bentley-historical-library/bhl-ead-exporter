@@ -187,7 +187,7 @@ class EADSerializer < ASpaceExport::Serializer
             end
           end
 
-          if descgrp_add or data.indexes
+          if descgrp_add or data.indexes.length > 0
             xml.descgrp({'type'=>'add'}) {
               serialize_descgrp_add_notes(data, xml, @fragments,level="resource")
               serialize_indexes(data, xml, @fragments)
