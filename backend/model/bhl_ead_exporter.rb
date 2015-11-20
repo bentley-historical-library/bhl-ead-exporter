@@ -187,7 +187,7 @@ class EADSerializer < ASpaceExport::Serializer
             end
           end
 
-          if descgrp_add
+          if descgrp_add or data.indexes.length > 0
             xml.descgrp({'type'=>'add'}) {
               serialize_descgrp_add_notes(data, xml, @fragments,level="resource")
               serialize_indexes(data, xml, @fragments)
@@ -721,7 +721,12 @@ class EADSerializer < ASpaceExport::Serializer
             end
             if (val = item['reference_text'])
               xml.ref(atts) {
-                sanitize_mixed_content( val, xml, fragments)
+                # MODIFICATION: Export indexentry refs in list/item tags for DLXS
+                xml.list({:type=>'simple'}) {
+                  xml.item {
+                    sanitize_mixed_content(val, xml, fragments)
+                  }
+                }
               }
             end
           }
