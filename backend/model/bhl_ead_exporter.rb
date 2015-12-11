@@ -166,7 +166,7 @@ class EADSerializer < ASpaceExport::Serializer
 
           serialize_controlaccess(data, xml, @fragments)
 
-          xml.dsc {
+          xml.dsc({'type'=>'combined'}) {
 
             data.children_indexes.each do |i|
               xml.text(
