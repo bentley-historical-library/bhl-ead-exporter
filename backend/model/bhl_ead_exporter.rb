@@ -352,7 +352,7 @@ class EADSerializer < ASpaceExport::Serializer
     end
   end
 
-  def serialize_subnotes(subnotes, xml, fragments, include_p = true)
+  def serialize_subnotes(subnotes, xml, fragments, include_p = true, note_type)
     subnotes.each do |sn|
       next if sn["publish"] === false && !@include_unpublished
 
@@ -361,8 +361,16 @@ class EADSerializer < ASpaceExport::Serializer
       title = sn['title']
 
       case sn['jsonmodel_type']
+      # MODIFICIATION: Wrap odd text in parens if there is only one paragraph
       when 'note_text'
-        sanitize_mixed_content(sn['content'], xml, fragments, include_p )
+        content = sn['content']
+        if note_type == 'odd'
+          blocks = content.split("\n\n")
+          if blocks.length == 1
+            content = "(#{content.strip})"
+          end
+        end
+        sanitize_mixed_content(content, xml, fragments, include_p )
       when 'note_chronology'
         xml.chronlist(audatt) {
           xml.head { sanitize_mixed_content(title, xml, fragments) } if title
@@ -623,8 +631,9 @@ class EADSerializer < ASpaceExport::Serializer
           xml.head { sanitize_mixed_content(head_text, xml, fragments) } unless ASpaceExport::Utils.headless_note?(note['type'], content ) 
           end
           sanitize_mixed_content(content, xml, fragments, ASpaceExport::Utils.include_p?(note['type']) ) if content
+          # MODIFICIATON: Send along note['type'] to insert parens inside odds
           if note['subnotes']
-            serialize_subnotes(note['subnotes'], xml, fragments, ASpaceExport::Utils.include_p?(note['type']))
+            serialize_subnotes(note['subnotes'], xml, fragments, ASpaceExport::Utils.include_p?(note['type']), note['type'])
           end
         }
     end
