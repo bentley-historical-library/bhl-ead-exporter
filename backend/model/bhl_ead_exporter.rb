@@ -3,6 +3,7 @@ require 'securerandom'
 
 require_relative 'lib/descgrp_types'
 require_relative 'lib/resolve_classifications'
+require_relative 'lib/singularize_extents'
 
 class EADSerializer < ASpaceExport::Serializer
   serializer_for :ead
@@ -249,7 +250,7 @@ class EADSerializer < ASpaceExport::Serializer
         end
 
         if !data.component_id.nil? && !data.component_id.empty?
-          xml.unitid data.component_id
+          xml.unitid "[" + data.component_id + "]"
         end
 
         serialize_origination(data, xml, fragments)
@@ -352,7 +353,7 @@ class EADSerializer < ASpaceExport::Serializer
     end
   end
 
-  def serialize_subnotes(subnotes, xml, fragments, include_p = true, note_type)
+  def serialize_subnotes(subnotes, xml, fragments, include_p = true, note_type, level)
     subnotes.each do |sn|
       next if sn["publish"] === false && !@include_unpublished
 
@@ -361,13 +362,19 @@ class EADSerializer < ASpaceExport::Serializer
       title = sn['title']
 
       case sn['jsonmodel_type']
-      # MODIFICIATION: Wrap odd text in parens if there is only one paragraph
+      # MODIFICIATION: Wrap odd and abstract text in parens if there is only one paragraph
       when 'note_text'
         content = sn['content']
         if note_type == 'odd'
           blocks = content.split("\n\n")
           if blocks.length == 1
             content = "(#{content.strip})"
+          end
+        end
+        if note_type == 'accessrestrict' && level == 'child'
+          blocks = content.split("\n\n")
+          if blocks.length == 1
+            content = "[#{content.strip}]"
           end
         end
         sanitize_mixed_content(content, xml, fragments, include_p )
@@ -472,7 +479,7 @@ class EADSerializer < ASpaceExport::Serializer
         end
     end
 
-    daodesc_content = daodesc_content || '[View Item]'
+    daodesc_content = "[#{daodesc_content}]" || '[Access Item]'
     
     
     if file_versions.empty?
@@ -505,7 +512,12 @@ class EADSerializer < ASpaceExport::Serializer
         next if e["publish"] === false && !@include_unpublished
         audatt = e["publish"] === false ? {:audience => 'internal'} : {}
         extent_statement = ''
-        extent_number_and_type = "#{e['number']} #{e['extent_type']}" if e['number'] && e['extent_type']
+        extent_number_float = e['number'].to_f
+        extent_type = e['extent_type']
+        if extent_number_float == 1.0
+          extent_type = SingularizeExtents.singularize_extent(extent_type)
+        end
+        extent_number_and_type = "#{e['number']} #{extent_type}"
         physical_details = []
         physical_details << e['container_summary'] if e['container_summary']
         physical_details << e['physical_details'] if e['physical_details']
@@ -548,6 +560,10 @@ class EADSerializer < ASpaceExport::Serializer
       audatt = note["publish"] === false ? {:audience => 'internal'} : {}
       content = ASpaceExport::Utils.extract_note_text(note, @include_unpublished)
 
+      if note['type'] == 'abstract' && level == 'child'
+        content = "(#{content.strip})"
+      end
+
       att = { :id => prefix_id(note['persistent_id']) }.reject {|k,v| v.nil? || v.empty? || v == "null" } 
       att ||= {}
 
@@ -586,7 +602,7 @@ class EADSerializer < ASpaceExport::Serializer
                 end
                 sanitize_mixed_content(content, xml, fragments, ASpaceExport::Utils.include_p?(note['type']) ) if content
                 if note['subnotes']
-                    serialize_subnotes(note['subnotes'], xml, fragments, ASpaceExport::Utils.include_p?(note['type']))
+                    serialize_subnotes(note['subnotes'], xml, fragments, ASpaceExport::Utils.include_p?(note['type']), note['type'], level)
                 end
                 xml.p {
                     xml.extptr( {
@@ -603,7 +619,7 @@ class EADSerializer < ASpaceExport::Serializer
                 end
                 sanitize_mixed_content(content, xml, fragments, ASpaceExport::Utils.include_p?(note['type']) ) if content
                 if note['subnotes']
-                    serialize_subnotes(note['subnotes'], xml, fragments, ASpaceExport::Utils.include_p?(note['type']))
+                    serialize_subnotes(note['subnotes'], xml, fragments, ASpaceExport::Utils.include_p?(note['type']), note['type'], level)
                 end
             }
         end
@@ -615,7 +631,7 @@ class EADSerializer < ASpaceExport::Serializer
             end
             sanitize_mixed_content(content, xml, fragments, ASpaceExport::Utils.include_p?(note['type']) ) if content
             if note['subnotes']
-                serialize_subnotes(note['subnotes'], xml, fragments, ASpaceExport::Utils.include_p?(note['type']))
+                serialize_subnotes(note['subnotes'], xml, fragments, ASpaceExport::Utils.include_p?(note['type']), note['type'], level)
             end
             xml.p {
                 xml.extptr( {
@@ -633,7 +649,7 @@ class EADSerializer < ASpaceExport::Serializer
           sanitize_mixed_content(content, xml, fragments, ASpaceExport::Utils.include_p?(note['type']) ) if content
           # MODIFICIATON: Send along note['type'] to insert parens inside odds
           if note['subnotes']
-            serialize_subnotes(note['subnotes'], xml, fragments, ASpaceExport::Utils.include_p?(note['type']), note['type'])
+            serialize_subnotes(note['subnotes'], xml, fragments, ASpaceExport::Utils.include_p?(note['type']), note['type'], level)
           end
         }
     end
@@ -796,7 +812,8 @@ class EADSerializer < ASpaceExport::Serializer
           titleproper = ""
           titleproper += "#{data.finding_aid_title} " if data.finding_aid_title
           titleproper += "#{data.title}" if ( data.title && titleproper.empty? )
-          titleproper += "<num>#{(0..3).map{|i| data.send("id_#{i}")}.compact.join('.')}</num>"
+          # MODIFICATION: Don't export the call number in titleproper
+          #titleproper += "<num>#{(0..3).map{|i| data.send("id_#{i}")}.compact.join('.')}</num>"
           xml.titleproper("type" => "filing") { sanitize_mixed_content(data.finding_aid_filing_title, xml, fragments)} unless data.finding_aid_filing_title.nil?
           xml.titleproper {  sanitize_mixed_content(titleproper, xml, fragments) }
           xml.subtitle {  sanitize_mixed_content(data.finding_aid_subtitle, xml, fragments) } unless data.finding_aid_subtitle.nil?
