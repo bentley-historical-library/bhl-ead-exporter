@@ -441,6 +441,8 @@ class EADSerializer < ASpaceExport::Serializer
       text = inst['container']["indicator_#{n}"]
       if n == 1 && inst['instance_type']
         atts[:label] = I18n.t("enumerations.instance_instance_type.#{inst['instance_type']}", :default => inst['instance_type'])
+      else
+        atts[:label] = inst['container']["type_#{n}"]
       end
       xml.container(atts) {
          sanitize_mixed_content(text, xml, fragments)  
