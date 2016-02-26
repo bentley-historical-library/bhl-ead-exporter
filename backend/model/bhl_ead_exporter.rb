@@ -606,15 +606,7 @@ class EADSerializer < ASpaceExport::Serializer
                 if note['subnotes']
                     serialize_subnotes(note['subnotes'], xml, fragments, ASpaceExport::Utils.include_p?(note['type']), note['type'], level)
                 end
-
-                digitalproc_exists = false
-                note['subnotes'].each do |sn|
-                  if sn['content'].include?('digitalproc')
-                    digitalproc_exists = true
-                  end
-                end
                 
-                if not digitalproc_exists
                   xml.p {
                       xml.extptr( {
                                   "href"=>"uarpacc",
@@ -622,7 +614,6 @@ class EADSerializer < ASpaceExport::Serializer
                                   "actuate"=>"onload"
                                   } )
                       }
-                end
                 }
         elsif level == 'child'
             xml.accessrestrict(atts) {
@@ -645,14 +636,23 @@ class EADSerializer < ASpaceExport::Serializer
             if note['subnotes']
                 serialize_subnotes(note['subnotes'], xml, fragments, ASpaceExport::Utils.include_p?(note['type']), note['type'], level)
             end
-            if not content.
-            xml.p {
-                xml.extptr( {
-                            "href"=>"digitalproc",
-                            "show"=>"embed",
-                            "actuate"=>"onload"
-                            } )
-                    }
+
+            digitalproc_exists = false
+            note['subnotes'].each do |sn|
+              if sn['content'].include?('digitalproc')
+                digitalproc_exists = true
+              end
+            end
+
+            if not digitalproc_exists
+              xml.p {
+                  xml.extptr( {
+                              "href"=>"digitalproc",
+                              "show"=>"embed",
+                              "actuate"=>"onload"
+                              } )
+                      }
+            end
             }
     else
         xml.send(note['type'], atts) {
