@@ -263,13 +263,23 @@ class EADSerializer < ASpaceExport::Serializer
         # For whatever reason, the old ead_containers method was not working
         # on archival_objects (see migrations/models/ead.rb).
 
+        has_physical_instance = false
+        has_digital_instance = false
+
         data.instances.each do |inst|
           case 
           when inst.has_key?('container') && !inst['container'].nil?
             serialize_container(inst, xml, fragments)
+            has_physical_instance = true
           when inst.has_key?('digital_object') && !inst['digital_object']['_resolved'].nil?
             serialize_digital_object(inst['digital_object']['_resolved'], xml, fragments)
+            has_digital_instance = true
           end
+        end
+
+        # MODIFICATION: Export <physloc>Online</physloc> when there is only a digital instance
+        if has_digital_instance and not has_physical_instance
+          xml.physloc "Online"
         end
 
       }
