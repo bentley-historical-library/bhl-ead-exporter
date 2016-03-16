@@ -22,12 +22,16 @@ class EADSerializer < ASpaceExport::Serializer
   def handle_linebreaks(content)
     # if there's already p tags, just leave as is 
     return content if ( content.strip =~ /^<p(\s|\/|>)/ or content.strip.length < 1 ) 
+    original_content = content
     blocks = content.split("\n\n").select { |b| !b.strip.empty? }
     if blocks.length > 1
       content = blocks.inject("") { |c,n| c << "<p>#{n.chomp}</p>"  }
     else
       content = "<p>#{content.strip}</p>"
     end
+    # in some cases adding p tags can create invalid markup with mixed content
+    # the "wrap" is just to ensure that there is a psuedo root element to eliminate a "false" error
+    content = original_content if Nokogiri::XML("<wrap>#{content}</wrap>").errors.any?
     content
   end
 
@@ -56,7 +60,7 @@ class EADSerializer < ASpaceExport::Serializer
       if ASpaceExport::Utils.has_html?(content)
          context.text( fragments << content )
       else
-        context.text content
+        context.text content.gsub("&amp;", "&") #thanks, Nokogiri
       end
     rescue
       context.cdata content
@@ -263,13 +267,23 @@ class EADSerializer < ASpaceExport::Serializer
         # For whatever reason, the old ead_containers method was not working
         # on archival_objects (see migrations/models/ead.rb).
 
+        has_physical_instance = false
+        has_digital_instance = false
+
         data.instances.each do |inst|
           case 
           when inst.has_key?('container') && !inst['container'].nil?
             serialize_container(inst, xml, fragments)
+            has_physical_instance = true
           when inst.has_key?('digital_object') && !inst['digital_object']['_resolved'].nil?
             serialize_digital_object(inst['digital_object']['_resolved'], xml, fragments)
+            has_digital_instance = true
           end
+        end
+
+        # MODIFICATION: Export <physloc>Online</physloc> when there is only a digital instance
+        if has_digital_instance and not has_physical_instance
+          xml.physloc "Online"
         end
 
       }
@@ -326,6 +340,7 @@ class EADSerializer < ASpaceExport::Serializer
   end
 
   # MODIFICATION: Add accnote extptr to controlaccess
+  # Modification: ensure that subjects and agents end with punctuation
   def serialize_controlaccess(data, xml, fragments)
     if (data.controlaccess_subjects.length + data.controlaccess_linked_agents.length) > 0
       xml.controlaccess {
@@ -337,15 +352,23 @@ class EADSerializer < ASpaceExport::Serializer
                         })
                 }
         data.controlaccess_subjects.each do |node_data|
+          content = node_data[:content].strip
+          if not content =~ /[\.\)\-]$/
+            content += "."
+          end
           xml.send(node_data[:node_name], node_data[:atts]) {
-            sanitize_mixed_content( node_data[:content], xml, fragments, ASpaceExport::Utils.include_p?(node_data[:node_name]) ) 
+            sanitize_mixed_content( content, xml, fragments, ASpaceExport::Utils.include_p?(node_data[:node_name]) ) 
           }
         end
 
 
         data.controlaccess_linked_agents.each do |node_data|
+          content = node_data[:content].strip
+          if not content =~ /[\.\)\-]$/
+            content += "."
+          end
           xml.send(node_data[:node_name], node_data[:atts]) {
-            sanitize_mixed_content( node_data[:content], xml, fragments,ASpaceExport::Utils.include_p?(node_data[:node_name]) ) 
+            sanitize_mixed_content( content, xml, fragments,ASpaceExport::Utils.include_p?(node_data[:node_name]) ) 
           }
         end
 
