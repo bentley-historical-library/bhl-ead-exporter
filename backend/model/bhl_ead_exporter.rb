@@ -139,7 +139,7 @@ class EADSerializer < ASpaceExport::Serializer
             # MODIFICATION: Add a type="call number" attribute to collection level unitids
             xml.unitid(:type => 'call number') { xml.text (0..3).map{|i| data.send("id_#{i}")}.compact.join('.')}
 
-            serialize_extents(data, xml, @fragments)
+            serialize_extents(data, xml, @fragments, level="resource")
 
             serialize_dates(data, xml, @fragments)
 
@@ -258,7 +258,7 @@ class EADSerializer < ASpaceExport::Serializer
         end
 
         serialize_origination(data, xml, fragments)
-        serialize_extents(data, xml, fragments)
+        serialize_extents(data, xml, fragments, level="child")
         serialize_dates(data, xml, fragments)
         # MODIFICATION: Set serialize_x_notes level to "child" so that extptrs are not added to accessrestrict or processinfo
         serialize_did_notes(data, xml, fragments, level="child")
@@ -364,6 +364,13 @@ class EADSerializer < ASpaceExport::Serializer
 
         data.controlaccess_linked_agents.each do |node_data|
           content = node_data[:content].strip
+          if content.include?(" -- ")
+            pieces = content.split(" -- ")
+            if pieces[0] =~ /\.$/
+              pieces[0] = pieces[0].gsub(/\.$/,"")
+            end
+            content = pieces.join(" -- ")
+          end
           if not content =~ /[\.\)\-]$/
             content += "."
           end
@@ -530,7 +537,7 @@ class EADSerializer < ASpaceExport::Serializer
 
   # MODIFCATION: Assemble a single extent statement in one physdesc
   # Consider modifying this to export separate collection level physdescs
-  def serialize_extents(obj, xml, fragments)
+  def serialize_extents(obj, xml, fragments, level)
     extent_statements = []
     if obj.extents.length
       obj.extents.each do |e|
@@ -557,11 +564,20 @@ class EADSerializer < ASpaceExport::Serializer
       end
     
     if extent_statements.length > 0
-        xml.physdesc {
-            xml.extent {
-              sanitize_mixed_content(extent_statements.join(', '), xml, fragments)  
-        }
-      }
+      if level == "resource"
+        extent_statements.each do |content|
+            xml.physdesc {
+                xml.extent {
+                  sanitize_mixed_content(content, xml, fragments)  
+            }
+          }
+        end
+      elsif level == "child"
+       xml.physdesc {
+                xml.extent {
+                  sanitize_mixed_content(extent_statements.join(', '), xml, fragments)  
+            }
+          }
       end
     end
   end
