@@ -562,6 +562,7 @@ class EADSerializer < ASpaceExport::Serializer
         end
         extent_statements << extent_statement
       end
+    end
     
     if extent_statements.length > 0
       if level == "resource"
