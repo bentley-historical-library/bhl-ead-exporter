@@ -147,9 +147,10 @@ class EADSerializer < ASpaceExport::Serializer
 
             serialize_did_notes(data, xml, @fragments, level="resource")
 
-            data.instances_with_containers.each do |instance|
-              serialize_container(instance, xml, @fragments)
-            end
+            # MODIFICATION: Don't serialize resource level containers
+            #data.instances_with_containers.each do |instance|
+              #serialize_container(instance, xml, @fragments)
+            #end
 
           }# </did>
             
