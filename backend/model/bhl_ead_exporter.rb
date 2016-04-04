@@ -147,9 +147,10 @@ class EADSerializer < ASpaceExport::Serializer
 
             serialize_did_notes(data, xml, @fragments, level="resource")
 
-            data.instances_with_containers.each do |instance|
-              serialize_container(instance, xml, @fragments)
-            end
+            # MODIFICATION: Don't serialize resource level containers
+            #data.instances_with_containers.each do |instance|
+              #serialize_container(instance, xml, @fragments)
+            #end
 
           }# </did>
             
@@ -549,7 +550,7 @@ class EADSerializer < ASpaceExport::Serializer
         if extent_number_float == 1.0
           extent_type = SingularizeExtents.singularize_extent(extent_type)
         end
-        extent_number_and_type = "#{e['number']} #{extent_type}"
+        extent_number_and_type = "#{e['number']} #{I18n.t('enumerations.extent_extent_type.'+e['extent_type'], :default => e['extent_type'])}"
         physical_details = []
         physical_details << e['container_summary'] if e['container_summary']
         physical_details << e['physical_details'] if e['physical_details']
