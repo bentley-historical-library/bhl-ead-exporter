@@ -468,7 +468,7 @@ class EADSerializer < ASpaceExport::Serializer
       #atts[:id] = @container_id 
       @parent_id = @container_id 
 
-      atts[:type] = inst['container']["type_#{n}"]
+      atts[:type] = inst['container']["type_#{n}"].downcase
       text = inst['container']["indicator_#{n}"]
       if n == 1 && inst['instance_type']
         atts[:label] = I18n.t("enumerations.instance_instance_type.#{inst['instance_type']}", :default => inst['instance_type'])
@@ -815,23 +815,24 @@ class EADSerializer < ASpaceExport::Serializer
   end
 
   # MODIFICATION: Serialize frontmatter for DLXS
+  # Currently not serializing classification (i.e., "Michigan Historical Collections", "UARP", etc.)
 
   def serialize_frontmatter(data, xml, fragments)
     xml.frontmatter {
       xml.titlepage {
-        classification_ref = nil
-        classification_title = nil
+        #classification_ref = nil
+        #classification_title = nil
 
-        data.classifications.each do |classification|
-          classification_ref = classification['ref']
-        end
+        #data.classifications.each do |classification|
+          #classification_ref = classification['ref']
+        #end
 
-        if classification_ref
-          classification_title = resolve_classification(classification_ref)
-        end
+        #if classification_ref
+          #classification_title = resolve_classification(classification_ref)
+        #end
 
         publisher = ""
-        publisher += "#{classification_title} <lb/>" if classification_title
+        #publisher += "#{classification_title} <lb/>" if classification_title
         publisher += data.repo.name + " <lb/>University of Michigan"
 
         xml.publisher { sanitize_mixed_content(publisher, xml, fragments) }
