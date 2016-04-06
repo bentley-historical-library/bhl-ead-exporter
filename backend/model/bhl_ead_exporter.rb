@@ -398,13 +398,13 @@ class EADSerializer < ASpaceExport::Serializer
         content = sn['content']
         if note_type == 'odd'
           blocks = content.split("\n\n")
-          if blocks.length == 1
+          if blocks.length == 1 && subnotes.length == 1
             content = "(#{content.strip})"
           end
         end
         if note_type == 'accessrestrict' && level == 'child'
           blocks = content.split("\n\n")
-          if blocks.length == 1
+          if blocks.length == 1 && subnotes.length == 1
             content = "[#{content.strip}]"
           end
         end
@@ -468,8 +468,17 @@ class EADSerializer < ASpaceExport::Serializer
       #atts[:id] = @container_id 
       @parent_id = @container_id 
 
-      atts[:type] = inst['container']["type_#{n}"].downcase
+      container_type = inst['container']["type_#{n}"]
       text = inst['container']["indicator_#{n}"]
+
+      if container_type == "Roll"
+        container_type = "reel"
+      elsif container_type == "Con." or container_type == "No."
+        container_type = "othertype"
+      end
+
+      atts[:type] = container_type.downcase
+
       if n == 1 && inst['instance_type']
         atts[:label] = I18n.t("enumerations.instance_instance_type.#{inst['instance_type']}", :default => inst['instance_type'])
       else
