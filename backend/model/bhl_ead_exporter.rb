@@ -145,6 +145,7 @@ class EADSerializer < ASpaceExport::Serializer
 
              # MODIFICATION: Set serialize_x_notes levels to resource so that extptrs are added to accessrestrict and processinfo
 
+
             serialize_did_notes(data, xml, @fragments, level="resource")
 
             # MODIFICATION: Don't serialize resource level containers
@@ -160,8 +161,18 @@ class EADSerializer < ASpaceExport::Serializer
 
           # MODIFICATION: Serialize <descgrp type="admin">
 
+          UARP = false
+
+          data.classifications.each do |classification|
+            classification_ref = classification['ref']
+            classification_title = resolve_classification(classification_ref)
+            if classification_identifer == "UARP"
+              UARP = true
+            end
+          end
+
           xml.descgrp({'type'=>'admin'}) {
-            serialize_descgrp_admin_notes(data, xml, @fragments,level="resource")
+            serialize_descgrp_admin_notes(data, xml, @fragments,level="resource", UARP)
           }
 
 
@@ -635,7 +646,7 @@ class EADSerializer < ASpaceExport::Serializer
   end
     
   # MODIFICATION: Add extptr to processinfo and accessrestrict when appropriate
-  def serialize_note_content(note, xml, fragments, level)
+  def serialize_note_content(note, xml, fragments, level, UARP=false)
     return if note["publish"] === false && !@include_unpublished
     audatt = note["publish"] === false ? {:audience => 'internal'} : {}
     content = note["content"] 
@@ -656,7 +667,8 @@ class EADSerializer < ASpaceExport::Serializer
                 if note['subnotes']
                     serialize_subnotes(note['subnotes'], xml, fragments, ASpaceExport::Utils.include_p?(note['type']), note['type'], level)
                 end
-                
+
+                if UARP                
                   xml.p {
                       xml.extptr( {
                                   "href"=>"uarpacc",
@@ -664,6 +676,7 @@ class EADSerializer < ASpaceExport::Serializer
                                   "actuate"=>"onload"
                                   } )
                       }
+                end
                 }
         elsif level == 'child'
             xml.accessrestrict(atts) {
@@ -689,7 +702,7 @@ class EADSerializer < ASpaceExport::Serializer
 
             digitalproc_exists = false
             note['subnotes'].each do |sn|
-              if sn['content'].include?('digitalproc')
+              if sn['content'] && sn['content'].include?('digitalproc')
                 digitalproc_exists = true
               end
             end
@@ -719,13 +732,13 @@ class EADSerializer < ASpaceExport::Serializer
   end
 
   # MODIFICATION: Put some notes in <descgrp type="admin">
-  def serialize_descgrp_admin_notes(data, xml, fragments, level)
+  def serialize_descgrp_admin_notes(data, xml, fragments, level, UARP=false)
     data.notes.each do |note|
       next if note["publish"] === false && !@include_unpublished
       next if note["internal"]
       next if note['type'].nil?
       next unless DescgrpTypes.descgrp_admin.include?(note['type'])
-      serialize_note_content(note,xml,fragments,level)
+      serialize_note_content(note,xml,fragments,level, UARP)
     end
   end
 
