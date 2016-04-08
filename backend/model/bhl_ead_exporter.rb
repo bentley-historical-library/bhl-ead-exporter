@@ -161,18 +161,18 @@ class EADSerializer < ASpaceExport::Serializer
 
           # MODIFICATION: Serialize <descgrp type="admin">
 
-          UARP = false
+          uarp_classification = false
 
           data.classifications.each do |classification|
             classification_ref = classification['ref']
             classification_title = resolve_classification(classification_ref)
             if classification_identifer == "UARP"
-              UARP = true
+              uarp_classification = true
             end
           end
 
           xml.descgrp({'type'=>'admin'}) {
-            serialize_descgrp_admin_notes(data, xml, @fragments,level="resource", UARP)
+            serialize_descgrp_admin_notes(data, xml, @fragments,level="resource", uarp_classification)
           }
 
 
@@ -646,7 +646,7 @@ class EADSerializer < ASpaceExport::Serializer
   end
     
   # MODIFICATION: Add extptr to processinfo and accessrestrict when appropriate
-  def serialize_note_content(note, xml, fragments, level, UARP=false)
+  def serialize_note_content(note, xml, fragments, level, uarp_classification=false)
     return if note["publish"] === false && !@include_unpublished
     audatt = note["publish"] === false ? {:audience => 'internal'} : {}
     content = note["content"] 
@@ -668,7 +668,7 @@ class EADSerializer < ASpaceExport::Serializer
                     serialize_subnotes(note['subnotes'], xml, fragments, ASpaceExport::Utils.include_p?(note['type']), note['type'], level)
                 end
 
-                if UARP                
+                if uarp_classification               
                   xml.p {
                       xml.extptr( {
                                   "href"=>"uarpacc",
@@ -732,13 +732,13 @@ class EADSerializer < ASpaceExport::Serializer
   end
 
   # MODIFICATION: Put some notes in <descgrp type="admin">
-  def serialize_descgrp_admin_notes(data, xml, fragments, level, UARP=false)
+  def serialize_descgrp_admin_notes(data, xml, fragments, level, uarp_classification=false)
     data.notes.each do |note|
       next if note["publish"] === false && !@include_unpublished
       next if note["internal"]
       next if note['type'].nil?
       next unless DescgrpTypes.descgrp_admin.include?(note['type'])
-      serialize_note_content(note,xml,fragments,level, UARP)
+      serialize_note_content(note,xml,fragments,level, uarp_classification)
     end
   end
 
