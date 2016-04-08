@@ -9,7 +9,8 @@ module SingularizeExtents
 			"folders"=>"folder",
 			"videotapes"=>"videotape",
 			"audiotapes"=>"audiotape",
-			"boxes"=>"box"
+			"boxes"=>"box",
+			"phonograph records"=>"phonograph record"
 		}
 	end
 
