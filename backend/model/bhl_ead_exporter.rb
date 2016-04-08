@@ -165,8 +165,8 @@ class EADSerializer < ASpaceExport::Serializer
 
           data.classifications.each do |classification|
             classification_ref = classification['ref']
-            classification_title = resolve_classification(classification_ref)
-            if classification_identifer == "UARP"
+            classification_identifier = resolve_classification(classification_ref)
+            if classification_identifier == "UARP"
               uarp_classification = true
             end
           end
