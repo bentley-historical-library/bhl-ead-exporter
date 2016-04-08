@@ -479,14 +479,15 @@ class EADSerializer < ASpaceExport::Serializer
       #atts[:id] = @container_id 
       @parent_id = @container_id 
 
-      container_type = inst['container']["type_#{n}"]
-      text = inst['container']["indicator_#{n}"]
-
-      if container_type == "Roll"
+      if inst['container']["type_#{n}"].include?("Roll")
         container_type = "reel"
-      elsif container_type == "Con." or container_type == "No."
+      elsif inst['container']["type_#{n}"].include?("Con.") or inst['container']["type_#{n}"].include?("No.")
         container_type = "othertype"
+      else
+        container_type = inst['container']["type_#{n}"].downcase
       end
+
+      text = inst['container']["indicator_#{n}"]
 
       atts[:type] = container_type.downcase
 
@@ -570,7 +571,7 @@ class EADSerializer < ASpaceExport::Serializer
         if extent_number_float == 1.0
           extent_type = SingularizeExtents.singularize_extent(extent_type)
         end
-        extent_number_and_type = "#{e['number']} #{I18n.t('enumerations.extent_extent_type.'+e['extent_type'], :default => e['extent_type'])}"
+        extent_number_and_type = "#{e['number']} #{I18n.t('enumerations.extent_extent_type.'+extent_type, :default => e['extent_type'])}"
         physical_details = []
         physical_details << e['container_summary'] if e['container_summary']
         physical_details << e['physical_details'] if e['physical_details']
