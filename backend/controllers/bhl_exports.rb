@@ -1,3 +1,4 @@
+require_relative "../model/lib/bhl_export"
 class ArchivesSpaceService < Sinatra::Base
 
   include BhlExportHelpers
