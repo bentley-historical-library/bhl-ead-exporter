@@ -362,7 +362,7 @@ class BHLEADSerializer < ASpaceExport::Serializer
                     when 'agent_corporate_entity'; 'corpname'
                     end
         xml.origination(:label => role) {
-         atts = {:role => relator, :source => source, :rules => rules, :authfilenumber => authfilenumber}
+         atts = {:role => relator, :source => source, :rules => rules}
          atts.reject! {|k, v| v.nil?}
 
           xml.send(node_name, atts) {
