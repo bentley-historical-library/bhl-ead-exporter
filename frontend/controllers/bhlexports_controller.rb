@@ -1,4 +1,4 @@
-class BhlExportsController < ApplicationController
+class BhlexportsController < ApplicationController
 
   set_access_control  "view_repository" => [:download_bhl_ead]
 
@@ -6,8 +6,9 @@ class BhlExportsController < ApplicationController
 
   def download_bhl_ead
     url = "/repositories/#{JSONModel::repository}/bhl_resource_descriptions/#{params[:id]}.xml"
+    metadata_url = "/repositories/#{JSONModel::repository}/resource_descriptions/#{params[:id]}.xml"
 
-    download_export(url,
+    download_bhl_export(url, metadata_url,
                     :include_unpublished => (params[:include_unpublished] ? params[:include_unpublished] : false),
                     :print_pdf => (params[:print_pdf] ? params[:print_pdf] : false),
                     :include_daos => (params[:include_daos] ? params[:include_daos] : false),
@@ -17,9 +18,9 @@ class BhlExportsController < ApplicationController
 
   private
 
-  def download_export(request_uri, params = {})
+  def download_bhl_export(request_uri, metadata_uri, params = {})
 
-    meta = JSONModel::HTTP::get_json("#{request_uri}/metadata")
+    meta = JSONModel::HTTP::get_json("#{metadata_uri}/metadata")
 
     respond_to do |format|
       format.html {
