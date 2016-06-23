@@ -1,7 +1,7 @@
 class BHLEADModel < EADModel
 	model_for :bhl_ead
 
-	  include ASpaceExport::ArchivalObjectDescriptionHelpers
+	include ASpaceExport::ArchivalObjectDescriptionHelpers
   include ASpaceExport::LazyChildEnumerations
 
   @data_src = Class.new do
