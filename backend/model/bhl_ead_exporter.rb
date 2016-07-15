@@ -124,14 +124,15 @@ class BHLEADSerializer < ASpaceExport::Serializer
 
           xml.did {
           
-
-            if (val = data.language)
-              xml.langmaterial {
-                xml.language(:langcode => val) {
-                  xml.text I18n.t("enumerations.language_iso639_2.#{val}", :default => val)
-                }
-              }
-            end
+            # MODIFICATION: Don't export the content of the Language drop down as a langmaterial element, as this ends of creating two langmaterials
+            # The one that we really want exported is from the "Language of Materials" text note
+            #if (val = data.language)
+              #xml.langmaterial {
+                #xml.language(:langcode => val) {
+                  #xml.text I18n.t("enumerations.language_iso639_2.#{val}", :default => val)
+                #}
+              #}
+            #end
             #  MODIFICATION: Added bhladd extptr to repository
             if (val = data.repo.name)
               xml.repository {
