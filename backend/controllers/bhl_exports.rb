@@ -27,4 +27,22 @@ class ArchivesSpaceService < Sinatra::Base
     stream_response(ead_stream)
   end
 
+
+  Endpoint.get('/repositories/:repo_id/bhl_resource_descriptions/:id.:fmt/metadata')
+    .description("Get export metadata for a Resource Description")
+    .params(["id", :id],
+            ["repo_id", :repo_id],
+            ["fmt", String, "Format of the request",
+                      :optional => true])
+    .permissions([:view_repository])
+    .returns([200, "The export metadata"]) \
+  do
+
+
+
+      json_response({"filename" => "#{Resource.id_to_eadid(params[:id])}.#{params[:fmt]}".gsub(/\s+/, '_'),
+                   "mimetype" => "application/#{params[:fmt]}"})
+  end
+
+
 end
