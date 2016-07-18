@@ -183,7 +183,7 @@ class BHLEADSerializer < ASpaceExport::Serializer
           data.classifications.each do |classification|
             classification_ref = classification['ref']
             classification_identifier = resolve_classification(classification_ref)
-            if classification_identifier == "UARP"
+            if classification_identifier == "UA"
               uarp_classification = true
             end
           end
@@ -497,7 +497,6 @@ class BHLEADSerializer < ASpaceExport::Serializer
       @container_id = prefix_id(SecureRandom.hex) 
       
       # MODIFICATION: Comment out container parent and id attributes.
-      # NOTE: If you are using the container management plugin, this will need to be done in container_management/backend/model/mixins/serialize_extra_container_values
       #atts[:parent] = @parent_id unless @parent_id.nil? 
       #atts[:id] = @container_id 
       @parent_id = @container_id 
@@ -556,7 +555,7 @@ class BHLEADSerializer < ASpaceExport::Serializer
         end
     end
 
-    daodesc_content = "[#{daodesc_content}]" || '[Access Item]'
+    daodesc_content = "[#{daodesc_content}]" || '[View Item]'
     
     
     if file_versions.empty?
@@ -581,7 +580,6 @@ class BHLEADSerializer < ASpaceExport::Serializer
   end
 
   # MODIFCATION: Assemble a single extent statement in one physdesc
-  # Consider modifying this to export separate collection level physdescs
   def serialize_extents(obj, xml, fragments, level)
     extent_statements = []
     if obj.extents.length
