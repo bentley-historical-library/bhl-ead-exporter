@@ -690,7 +690,14 @@ class BHLEADSerializer < ASpaceExport::Serializer
                     serialize_subnotes(note['subnotes'], xml, fragments, ASpaceExport::Utils.include_p?(note['type']), note['type'], level)
                 end
 
-                if uarp_classification               
+                uarpacc_exists = false
+                note['subnotes'].each do |sn|
+                  if sn['content'] && sn['content'].include?('uarpacc')
+                    uarpacc_exists = true
+                  end
+                end
+
+                if uarp_classification and not uarpacc_exists  
                   xml.p {
                       xml.extptr( {
                                   "href"=>"uarpacc",
