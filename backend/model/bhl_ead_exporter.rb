@@ -555,7 +555,7 @@ class BHLEADSerializer < ASpaceExport::Serializer
         end
     end
 
-    daodesc_content = "[#{daodesc_content}]" || '[View Item]'
+    daodesc_content = "[#{daodesc_content}]" || "[access item]"
     
     
     if file_versions.empty?
