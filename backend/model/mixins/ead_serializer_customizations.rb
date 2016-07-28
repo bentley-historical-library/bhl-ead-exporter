@@ -3,7 +3,7 @@ module EADSerializerCustomizations
   def self.included(base)
     base.class_eval do
 
-      def serialize_ead_header(data, xml, fragments)
+      def serialize_eadheader(data, xml, fragments)
         modified_serialize_eadheader(data, xml, fragments)
       end
 
