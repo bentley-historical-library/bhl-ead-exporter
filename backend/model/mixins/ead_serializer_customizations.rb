@@ -151,7 +151,7 @@ module EADSerializerCustomizations
         if extent_number_float == 1.0
           extent_type = SingularizeExtents.singularize_extent(extent_type)
         end
-        extent_number_and_type = "#{e['number']} #{I18n.t('enumerations.extent_extent_type.'+extent_type, :default => extent_type)}"
+        extent_number_and_type = "#{e['number']} #{extent_type}"
         physical_details = []
         physical_details << e['container_summary'] if e['container_summary']
         physical_details << e['physical_details'] if e['physical_details']
