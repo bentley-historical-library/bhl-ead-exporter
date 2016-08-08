@@ -432,11 +432,11 @@ class BHLEADSerializer < ASpaceExport::Serializer
         content = sn['content']
         if note_type == 'odd'
           blocks = content.split("\n\n")
-          if blocks.length == 1 && subnotes.length == 1
+          if blocks.length == 1 && subnotes.length == 1 && not content.strip =~ /^[\[\(]/
             content = "(#{content.strip})"
           end
         end
-        if note_type == 'accessrestrict' && level == 'child'
+        if note_type == 'accessrestrict' && level == 'child' && not content.strip =~ /^[\[\(]/
           blocks = content.split("\n\n")
           if blocks.length == 1 && subnotes.length == 1
             content = "[#{content.strip}]"
@@ -827,8 +827,9 @@ class BHLEADSerializer < ASpaceExport::Serializer
 
   def serialize_indexes(data, xml, fragments)
     data.indexes.each do |note|
-      next if note["publish"] === false && !@include_unpublished
-      audatt = note["publish"] === false ? {:audience => 'internal'} : {}
+      # MODIFICATION: Export indexes even if they are unpublished (due to some legacy import issues)
+      #next if note["publish"] === false && !@include_unpublished
+      #audatt = note["publish"] === false ? {:audience => 'internal'} : {}
       content = ASpaceExport::Utils.extract_note_text(note, @include_unpublished)
       head_text = nil
       if note['label']
