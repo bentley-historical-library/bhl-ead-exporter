@@ -837,7 +837,7 @@ class BHLEADSerializer < ASpaceExport::Serializer
       #elsif note['type']
         #head_text = I18n.t("enumerations._note_types.#{note['type']}", :default => note['type'])
       end
-      atts = {:id => prefix_id(note["persistent_id"]) }.reject{|k,v| v.nil? || v.empty? || v == "null" }.merge(audatt)
+      atts = {:id => prefix_id(note["persistent_id"]) }.reject{|k,v| v.nil? || v.empty? || v == "null" } #.merge(audatt)
 
       content, head_text = extract_head_text(content, head_text) 
       xml.index(atts) {
