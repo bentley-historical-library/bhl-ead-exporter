@@ -430,7 +430,7 @@ class BHLEADSerializer < ASpaceExport::Serializer
       # MODIFICIATION: Wrap odd and abstract text in parens if there is only one paragraph
       when 'note_text'
         content = sn['content']
-        if note_type == 'odd' && !(content.strip =~ /^[\[\(]/)
+        if note_type == 'odd' && level == 'child' && !(content.strip =~ /^[\[\(]/)
           blocks = content.split("\n\n")
           if blocks.length == 1 && subnotes.length == 1
             content = "(#{content.strip})"

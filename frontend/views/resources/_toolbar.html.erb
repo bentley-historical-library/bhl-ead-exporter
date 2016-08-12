@@ -8,7 +8,7 @@
           <fieldset>
             <input type="hidden" name="id", value="<%= @resource.id %>" />
             <label class="checkbox" for="include-unpublished">
-              <input type="checkbox" id="include-unpublished" name="include_unpublished" checked="checked"/>
+              <input type="checkbox" id="include-unpublished" name="include_unpublished"/>
               <%= I18n.t("export_options.include_unpublished") %>&#160;
             </label>
             <label class="checkbox" for="include-daos">
@@ -16,7 +16,7 @@
               <%= I18n.t("export_options.include_daos") %>&#160;
             </label>
             <label class="checkbox" for="numbered-cs">
-              <input type="checkbox" id="numbered-cs" name="numbered_cs" />
+              <input type="checkbox" id="numbered-cs" name="numbered_cs" checked="checked" />
               <%= I18n.t("export_options.numbered_cs") %>&#160;
             </label>
           </fieldset>
