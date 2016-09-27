@@ -27,6 +27,30 @@ class ArchivesSpaceService < Sinatra::Base
     stream_response(ead_stream)
   end
 
+  Endpoint.get('/repositories/:repo_id/bhl_resource_descriptions_digitization/:id.xml')
+    .description("Get an EAD representation of a Resource for use in Digitization")
+    .params(["id", :id],
+            ["include_unpublished", BooleanParam,
+             "Include unpublished records", :optional => true],
+            ["include_daos", BooleanParam,
+             "Include digital objects in dao tags", :optional => true],
+            ["numbered_cs", BooleanParam,
+             "Use numbered <c> tags in ead", :optional => true],
+            ["print_pdf", BooleanParam,
+             "Print EAD to pdf", :optional => true],
+            ["repo_id", :repo_id])
+    .permissions([:view_repository])
+    .returns([200, "(:resource)"]) \
+  do
+    redirect to("/repositories/#{params[:repo_id]}/resource_descriptions/#{params[:id]}.pdf?#{ params.map { |k,v| "#{k}=#{v}" }.join("&") }") if params[:print_pdf] 
+    ead_stream = generate_digitization_ead(params[:id],
+                              (params[:include_unpublished] || false),
+                              (params[:include_daos] || false),
+                              (params[:numbered_cs] || false))
+
+    stream_response(ead_stream)
+  end
+
 
   Endpoint.get('/repositories/:repo_id/bhl_resource_descriptions/:id.:fmt/metadata')
     .description("Get export metadata for a Resource Description")
