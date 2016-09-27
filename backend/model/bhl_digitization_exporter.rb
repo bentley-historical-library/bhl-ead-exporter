@@ -248,7 +248,7 @@ class BHLDigitizationSerializer < ASpaceExport::Serializer
 
     tag_name = @use_numbered_c_tags ? :"c#{c_depth.to_s.rjust(2, '0')}" : :c
 
-    atts = {:level => data.level, :otherlevel => data.other_level, :id => prefix_id(data.ref_id), :altrender => data.uri}
+    atts = {:level => data.level, :otherlevel => data.other_level, :id => data.ref_id, :altrender => data.uri}
 
     if data.publish === false
       atts[:audience] = 'internal'
