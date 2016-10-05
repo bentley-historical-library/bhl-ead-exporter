@@ -154,7 +154,7 @@ class BHLDigitizationSerializer < ASpaceExport::Serializer
             # MODIFICATION: Add a type="call number" attribute to collection level unitids
             xml.unitid(:type => 'call number') { xml.text (0..3).map{|i| data.send("id_#{i}")}.compact.join('.')}
 
-            serialize_extents(data, xml, @fragments, level="resource")
+            serialize_extents(data, xml, @fragments)
 
             serialize_dates(data, xml, @fragments)
 
@@ -248,7 +248,13 @@ class BHLDigitizationSerializer < ASpaceExport::Serializer
 
     tag_name = @use_numbered_c_tags ? :"c#{c_depth.to_s.rjust(2, '0')}" : :c
 
-    atts = {:level => data.level, :otherlevel => data.other_level, :id => data.ref_id, :altrender => data.uri}
+    frontend_url = "https://aspace-bentley.quod.lib.umich.edu"
+    archival_object_uri = data.uri
+    archival_object_number = archival_object_uri.split("/")[-1]
+    resource_number = data.resource["ref"].split("/")[-1]
+    link_to_archival_object = frontend_url + "/resources/" + resource_number + "#tree::archival_object_" + archival_object_number
+
+    atts = {:level => data.level, :otherlevel => data.other_level, :id => prefix_id(data.ref_id), :altrender => archival_object_uri, :encodinganalog => link_to_archival_object}
 
     if data.publish === false
       atts[:audience] = 'internal'
@@ -267,7 +273,7 @@ class BHLDigitizationSerializer < ASpaceExport::Serializer
         end
 
         serialize_origination(data, xml, fragments)
-        serialize_extents(data, xml, fragments, level="child")
+        serialize_extents(data, xml, fragments)
         serialize_dates(data, xml, fragments)
         # MODIFICATION: Set serialize_x_notes level to "child" so that extptrs are not added to accessrestrict or processinfo
         serialize_did_notes(data, xml, fragments, level="child")
@@ -551,49 +557,25 @@ class BHLDigitizationSerializer < ASpaceExport::Serializer
     
   end
 
-  # MODIFCATION: Assemble a single extent statement in one physdesc
-  def serialize_extents(obj, xml, fragments, level)
-    extent_statements = []
+  def serialize_extents(obj, xml, fragments)
     if obj.extents.length
       obj.extents.each do |e|
         next if e["publish"] === false && !@include_unpublished
         audatt = e["publish"] === false ? {:audience => 'internal'} : {}
-        extent_statement = ''
-        extent_number_float = e['number'].to_f
-        extent_type = e['extent_type']
-        if extent_number_float == 1.0
-          extent_type = SingularizeExtents.singularize_extent(extent_type)
-        end
-        extent_number_and_type = "#{e['number']} #{extent_type}"
-        physical_details = []
-        physical_details << e['container_summary'] if e['container_summary']
-        physical_details << e['physical_details'] if e['physical_details']
-        physical_details << e['dimensions'] if e['dimensions']
-        physical_detail = physical_details.join('; ')
-        if extent_number_and_type && physical_details.length > 0
-          extent_statement += extent_number_and_type + ' (' + physical_detail + ')'
-        else
-          extent_statement += extent_number_and_type
-        end
-        extent_statements << extent_statement
-      end
-    end
-    
-    if extent_statements.length > 0
-      if level == "resource"
-        extent_statements.each do |content|
-            xml.physdesc {
-                xml.extent {
-                  sanitize_mixed_content(content, xml, fragments)  
+        xml.physdesc({:altrender => e['portion']}.merge(audatt)) {
+          if e['number'] && e['extent_type']
+            xml.extent({:altrender => 'materialtype spaceoccupied'}) {
+              sanitize_mixed_content("#{e['number']} #{e['extent_type']}", xml, fragments)
             }
-          }
-        end
-      elsif level == "child"
-       xml.physdesc {
-                xml.extent {
-                  sanitize_mixed_content(extent_statements.join(', '), xml, fragments)  
+          end
+          if e['container_summary']
+            xml.extent({:altrender => 'carrier'}) {
+              sanitize_mixed_content( e['container_summary'], xml, fragments)
             }
-          }
+          end
+          xml.physfacet { sanitize_mixed_content(e['physical_details'],xml, fragments) } if e['physical_details']
+          xml.dimensions  {   sanitize_mixed_content(e['dimensions'],xml, fragments) }  if e['dimensions']
+        }
       end
     end
   end
