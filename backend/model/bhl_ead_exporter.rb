@@ -80,7 +80,104 @@ class BHLEADSerializer < ASpaceExport::Serializer
       context.cdata content
     end
   end
+
+  def make_abstract_addition(data)
+    links_hash = make_links_hash(data)
+    abstract_additions = []
+
+    access_systems = {:deepblue => "Deep Blue", 
+                      :bdml => "the Bentley Digital Media Library", 
+                      :imagebank => "the Bentley Image Bank", 
+                      :archive_it => "the Bentley Historical Library's web archives",
+                      :polarbear => "the Polar Bear Expedition Digital Collections",
+                      :internet_archive => "the Internet Archive",
+                      :parsons => "the Jeffrey R. Parsons Archaeological Sites Images collection"}
+
+    for access_system in access_systems.keys
+      if links_hash.has_key?(access_system)
+        link = links_hash[access_system]
+        link_text = access_systems[access_system]
+        abstract_additions << '<title actuate="onrequest" show="new" href="' + link + '">' + link_text + '</title>'
+      end
+    end
   
+    if not abstract_additions.empty?
+      abstract_addition = "Digital materials from this collection can be found in " + abstract_additions.join(", ")
+    else
+      abstract_addition = false
+    end
+
+    abstract_addition
+  end
+
+  def make_links_hash(data)
+    links_hash = {}
+
+    data.instances.each do |inst|
+      if inst.has_key?("digital_object") && !inst["digital_object"]["_resolved"].nil?
+        digital_object = inst["digital_object"]["_resolved"]
+        file_version = digital_object["file_versions"][0]
+        file_uri = file_version["file_uri"]
+        links_hash[:deepblue] = file_uri
+      end
+    end
+
+    access_systems = {"polarbear" => :polarbear, 
+                      "hdl.handle.net/2027.42" => :deepblue, 
+                      "archive-it.org" => :archive_it, 
+                      "mivideo" => :bdml, 
+                      "quod.lib.umich.edu/cgi/i/image" => :imagebank,
+                      "quod.lib.umich.edu/b/bhl?" => :imagebank,
+                      "quod.lib.umich.edu/b/bhl3ic?" => :parsons,
+                      "web.archive.org" => :internet_archive}
+
+    access_system_urls = {:polarbear => "http://quod.lib.umich.edu/p/polaread", 
+                          :deepblue => "https://deepblue.lib.umich.edu/documents", 
+                          :archive_it => "https://archive-it.org/organizations/934", 
+                          :bdml => "https://bentley.mivideo.it.umich.edu", 
+                          :imagebank => "https://quod.lib.umich.edu/b/bhl?cc=bhl;page=index;c=bhl",
+                          :internet_archive => "http://archive.org/web/",
+                          :parsons => "https://quod.lib.umich.edu/b/bhl3ic?page=index"}
+
+    links = make_links_array(data)
+
+    for link in links
+      for access_system in access_systems.keys
+        access_system_key = access_systems[access_system]
+        access_system_url = access_system_urls[access_system_key]
+        if link.include?(access_system) and not links_hash.has_key?(access_system_key)
+          links_hash[access_system_key] = access_system_url
+        end
+      end
+    end
+
+    links_hash
+
+  end
+
+  def make_links_array(data)
+    links = []
+
+    data.instances.each do |inst|
+      if inst.has_key?("digital_object") && !inst["digital_object"]["_resolved"].nil?
+        digital_object = inst["digital_object"]["_resolved"]
+        file_version = digital_object["file_versions"][0]
+        file_uri = file_version["file_uri"]
+        links << file_uri
+      end
+    end
+
+    data.children_indexes.each do |i|
+      child_links = make_links_array(data.get_child(i))
+      for link in child_links
+        if not links.include?(link)
+          links << link
+        end
+      end
+    end
+
+    links
+  end
   
   def stream(data)
     @stream_handler = ASpaceExport::StreamHandler.new
@@ -647,6 +744,13 @@ class BHLEADSerializer < ASpaceExport::Serializer
 
       if note['type'] == 'abstract' && level == 'child'
         content = "(#{content.strip})"
+      end
+
+      if note['type'] == 'abstract' && level == 'resource'
+        abstract_addition = make_abstract_addition(data)
+        if abstract_addition
+          content += "<lb/>#{abstract_addition}"
+        end
       end
 
       att = { :id => prefix_id(note['persistent_id']) }.reject {|k,v| v.nil? || v.empty? || v == "null" } 
