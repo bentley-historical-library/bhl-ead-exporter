@@ -33,9 +33,19 @@ class BHLEADSerializer < ASpaceExport::Serializer
     end 
   end
  
+  def xml_errors(content)
+    # there are message we want to ignore. annoying that java xml lib doesn't
+    # use codes like libxml does...
+    ignore = [ /Namespace prefix .* is not defined/, /The prefix .* is not bound/  ] 
+    ignore = Regexp.union(ignore) 
+    # the "wrap" is just to ensure that there is a psuedo root element to eliminate a "false" error
+    Nokogiri::XML("<wrap>#{content}</wrap>").errors.reject { |e| e.message =~ ignore  }
+  end 
+
+
   def handle_linebreaks(content)
-    # if there's already p tags, just leave as is 
-    return content if ( content.strip =~ /^<p(\s|\/|>)/ or content.strip.length < 1 ) 
+    # if there's already p tags, just leave as is
+    return content if ( content.strip =~ /^<p(\s|\/|>)/ or content.strip.length < 1 )
     original_content = content
     blocks = content.split("\n\n").select { |b| !b.strip.empty? }
     if blocks.length > 1
@@ -43,10 +53,17 @@ class BHLEADSerializer < ASpaceExport::Serializer
     else
       content = "<p>#{content.strip}</p>"
     end
+   
+    # first lets see if there are any &
+    # note if there's a &somewordwithnospace , the error is EntityRef and wont
+    # be fixed here...
+    if xml_errors(content).any? { |e| e.message.include?("The entity name must immediately follow the '&' in the entity reference.") }
+      content.gsub!("& ", "&amp; ")
+    end
+
     # in some cases adding p tags can create invalid markup with mixed content
-    # the "wrap" is just to ensure that there is a psuedo root element to eliminate a "false" error
-    content = original_content if Nokogiri::XML("<wrap>#{content}</wrap>").errors.any?
-    content
+    # just return the original content if there's still problems 
+    xml_errors(content).any? ? original_content : content 
   end
 
   def strip_p(content)
@@ -80,7 +97,105 @@ class BHLEADSerializer < ASpaceExport::Serializer
       context.cdata content
     end
   end
+
+  def make_abstract_addition(data, xml, fragments)
+    links_hash = make_links_hash(data, xml, fragments)
+    abstract_additions = []
+
+    access_systems = {:deepblue => "Deep Blue", 
+                      :bdml => "the Bentley Digital Media Library", 
+                      :imagebank => "the Bentley Image Bank", 
+                      :archive_it => "the Bentley Historical Library's web archives",
+                      :polarbear => "the Polar Bear Expedition Digital Collections",
+                      :internet_archive => "the Internet Archive",
+                      :parsons => "the Jeffrey R. Parsons Archaeological Sites Images collection"}
+
+    for access_system in access_systems.keys
+      if links_hash.has_key?(access_system)
+        link = links_hash[access_system]
+        link_text = access_systems[access_system]
+        abstract_additions << '<title actuate="onrequest" show="new" href="' + link + '">' + link_text + '</title>'
+      end
+    end
   
+    if not abstract_additions.empty?
+      abstract_addition = "Digital materials from this collection can be found in " + abstract_additions.join(", ")
+    else
+      abstract_addition = false
+    end
+
+    abstract_addition
+  end
+
+  def make_links_hash(data, xml, fragments)
+    links_hash = {}
+
+    data.instances.each do |inst|
+      if inst.has_key?("digital_object") && !inst["digital_object"]["_resolved"].nil?
+        digital_object = inst["digital_object"]["_resolved"]
+        file_version = digital_object["file_versions"][0]
+        file_uri = file_version["file_uri"]
+        links_hash[:deepblue] = file_uri
+      end
+    end
+
+    access_systems = {"polarbear" => :polarbear, 
+                      "hdl.handle.net/2027.42" => :deepblue, 
+                      "archive-it.org" => :archive_it, 
+                      "mivideo" => :bdml, 
+                      "quod.lib.umich.edu/cgi/i/image" => :imagebank,
+                      "quod.lib.umich.edu/b/bhl?" => :imagebank,
+                      "quod.lib.umich.edu/b/bhl3ic?" => :parsons,
+                      "web.archive.org" => :internet_archive}
+
+    access_system_urls = {:polarbear => "http://quod.lib.umich.edu/p/polaread", 
+                          :deepblue => "https://deepblue.lib.umich.edu/documents", 
+                          :archive_it => "https://archive-it.org/organizations/934", 
+                          :bdml => "https://bentley.mivideo.it.umich.edu", 
+                          :imagebank => "https://quod.lib.umich.edu/b/bhl?cc=bhl;page=index;c=bhl",
+                          :internet_archive => "http://archive.org/web/",
+                          :parsons => "https://quod.lib.umich.edu/b/bhl3ic?page=index"}
+
+    links = make_links_array(data, xml, fragments)
+
+    for link in links
+      for access_system in access_systems.keys
+        access_system_key = access_systems[access_system]
+        access_system_url = access_system_urls[access_system_key]
+        if link.include?(access_system) and not links_hash.has_key?(access_system_key)
+          links_hash[access_system_key] = access_system_url
+        end
+      end
+    end
+
+    links_hash
+
+  end
+
+  def make_links_array(data, xml, fragments)
+    links = []
+
+    data.instances.each do |inst|
+      if inst.has_key?("digital_object") && !inst["digital_object"]["_resolved"].nil?
+        digital_object = inst["digital_object"]["_resolved"]
+        file_version = digital_object["file_versions"][0]
+        file_uri = file_version["file_uri"]
+        links << file_uri
+      end
+    end
+
+    data.children_indexes.each do |i|
+      #@stream_handler.buffer { |xml, new_fragments| }
+        child_links = make_links_array(data.get_child(i), xml, fragments)
+        for link in child_links
+          if not links.include?(link)
+            links << link
+          end
+        end
+    end
+
+    links
+  end
   
   def stream(data)
     @stream_handler = ASpaceExport::StreamHandler.new
@@ -547,16 +662,13 @@ class BHLEADSerializer < ASpaceExport::Serializer
     atts['title'] = digital_object['title'] if digital_object['title']
         
     #MODIFICATION: Insert original note into <daodesc> instead of the default title
-    daodesc_content = nil
+    daodesc_content = "[access item]"
     
     digital_object_notes.each do |note|
         if note['type'] == 'note'
-            daodesc_content = note['content'][0]
+            daodesc_content = "[#{note['content'][0]}]"
         end
-    end
-
-    daodesc_content = "[#{daodesc_content}]" || "[access item]"
-    
+    end    
     
     if file_versions.empty?
       atts['href'] = digital_object['digital_object_id']
@@ -569,7 +681,7 @@ class BHLEADSerializer < ASpaceExport::Serializer
       file_versions.each do |file_version|
         atts['href'] = file_version['file_uri'] || digital_object['digital_object_id']
         # MODIFICATION: downcase xlink_actuate_attribute
-        atts['actuate'] = file_version['xlink_actuate_attribute'].downcase || 'onrequest'
+        atts['actuate'] = file_version['xlink_actuate_attribute'] ? file_version['xlink_actuate_attribute'].downcase : 'onrequest'
         atts['show'] = file_version['xlink_show_attribute'] || 'new'
         xml.dao(atts) {
           xml.daodesc { sanitize_mixed_content(daodesc_content, xml, fragments, true) } if content
@@ -648,6 +760,13 @@ class BHLEADSerializer < ASpaceExport::Serializer
       if note['type'] == 'abstract' && level == 'child'
         content = "(#{content.strip})"
       end
+
+      #if note['type'] == 'abstract' && level == 'resource'
+        #abstract_addition = make_abstract_addition(data, xml, fragments)
+        #if abstract_addition
+          #content += "<lb/>#{abstract_addition}"
+        #end
+      #end
 
       att = { :id => prefix_id(note['persistent_id']) }.reject {|k,v| v.nil? || v.empty? || v == "null" } 
       att ||= {}
