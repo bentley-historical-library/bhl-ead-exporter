@@ -33,9 +33,19 @@ class BHLEADSerializer < ASpaceExport::Serializer
     end 
   end
  
+  def xml_errors(content)
+    # there are message we want to ignore. annoying that java xml lib doesn't
+    # use codes like libxml does...
+    ignore = [ /Namespace prefix .* is not defined/, /The prefix .* is not bound/  ] 
+    ignore = Regexp.union(ignore) 
+    # the "wrap" is just to ensure that there is a psuedo root element to eliminate a "false" error
+    Nokogiri::XML("<wrap>#{content}</wrap>").errors.reject { |e| e.message =~ ignore  }
+  end 
+
+
   def handle_linebreaks(content)
-    # if there's already p tags, just leave as is 
-    return content if ( content.strip =~ /^<p(\s|\/|>)/ or content.strip.length < 1 ) 
+    # if there's already p tags, just leave as is
+    return content if ( content.strip =~ /^<p(\s|\/|>)/ or content.strip.length < 1 )
     original_content = content
     blocks = content.split("\n\n").select { |b| !b.strip.empty? }
     if blocks.length > 1
@@ -43,10 +53,17 @@ class BHLEADSerializer < ASpaceExport::Serializer
     else
       content = "<p>#{content.strip}</p>"
     end
+   
+    # first lets see if there are any &
+    # note if there's a &somewordwithnospace , the error is EntityRef and wont
+    # be fixed here...
+    if xml_errors(content).any? { |e| e.message.include?("The entity name must immediately follow the '&' in the entity reference.") }
+      content.gsub!("& ", "&amp; ")
+    end
+
     # in some cases adding p tags can create invalid markup with mixed content
-    # the "wrap" is just to ensure that there is a psuedo root element to eliminate a "false" error
-    content = original_content if Nokogiri::XML("<wrap>#{content}</wrap>").errors.any?
-    content
+    # just return the original content if there's still problems 
+    xml_errors(content).any? ? original_content : content 
   end
 
   def strip_p(content)
@@ -81,8 +98,8 @@ class BHLEADSerializer < ASpaceExport::Serializer
     end
   end
 
-  def make_abstract_addition(data)
-    links_hash = make_links_hash(data)
+  def make_abstract_addition(data, xml, fragments)
+    links_hash = make_links_hash(data, xml, fragments)
     abstract_additions = []
 
     access_systems = {:deepblue => "Deep Blue", 
@@ -110,7 +127,7 @@ class BHLEADSerializer < ASpaceExport::Serializer
     abstract_addition
   end
 
-  def make_links_hash(data)
+  def make_links_hash(data, xml, fragments)
     links_hash = {}
 
     data.instances.each do |inst|
@@ -139,7 +156,7 @@ class BHLEADSerializer < ASpaceExport::Serializer
                           :internet_archive => "http://archive.org/web/",
                           :parsons => "https://quod.lib.umich.edu/b/bhl3ic?page=index"}
 
-    links = make_links_array(data)
+    links = make_links_array(data, xml, fragments)
 
     for link in links
       for access_system in access_systems.keys
@@ -155,7 +172,7 @@ class BHLEADSerializer < ASpaceExport::Serializer
 
   end
 
-  def make_links_array(data)
+  def make_links_array(data, xml, fragments)
     links = []
 
     data.instances.each do |inst|
@@ -168,12 +185,13 @@ class BHLEADSerializer < ASpaceExport::Serializer
     end
 
     data.children_indexes.each do |i|
-      child_links = make_links_array(data.get_child(i))
-      for link in child_links
-        if not links.include?(link)
-          links << link
+      #@stream_handler.buffer { |xml, new_fragments| }
+        child_links = make_links_array(data.get_child(i), xml, fragments)
+        for link in child_links
+          if not links.include?(link)
+            links << link
+          end
         end
-      end
     end
 
     links
@@ -746,12 +764,12 @@ class BHLEADSerializer < ASpaceExport::Serializer
         content = "(#{content.strip})"
       end
 
-      if note['type'] == 'abstract' && level == 'resource'
-        abstract_addition = make_abstract_addition(data)
-        if abstract_addition
-          content += "<lb/>#{abstract_addition}"
-        end
-      end
+      #if note['type'] == 'abstract' && level == 'resource'
+        #abstract_addition = make_abstract_addition(data, xml, fragments)
+        #if abstract_addition
+          #content += "<lb/>#{abstract_addition}"
+        #end
+      #end
 
       att = { :id => prefix_id(note['persistent_id']) }.reject {|k,v| v.nil? || v.empty? || v == "null" } 
       att ||= {}
