@@ -662,16 +662,13 @@ class BHLEADSerializer < ASpaceExport::Serializer
     atts['title'] = digital_object['title'] if digital_object['title']
         
     #MODIFICATION: Insert original note into <daodesc> instead of the default title
-    daodesc_content = nil
+    daodesc_content = "[access item]"
     
     digital_object_notes.each do |note|
         if note['type'] == 'note'
-            daodesc_content = note['content'][0]
+            daodesc_content = "[#{note['content'][0]}]"
         end
-    end
-
-    daodesc_content = "[#{daodesc_content}]" || "[access item]"
-    
+    end    
     
     if file_versions.empty?
       atts['href'] = digital_object['digital_object_id']
