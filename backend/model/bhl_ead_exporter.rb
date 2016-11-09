@@ -865,6 +865,17 @@ class BHLEADSerializer < ASpaceExport::Serializer
                       }
             end
             }
+    elsif note['type'] == "arrangement" && level == "child"
+      xml.odd(atts) {
+          if head_text
+          xml.head { sanitize_mixed_content(head_text, xml, fragments) } unless ASpaceExport::Utils.headless_note?(note['type'], content ) 
+          end
+          sanitize_mixed_content(content, xml, fragments, ASpaceExport::Utils.include_p?(note['type']) ) if content
+          # MODIFICIATON: Send along note['type'] to insert parens inside odds
+          if note['subnotes']
+            serialize_subnotes(note['subnotes'], xml, fragments, ASpaceExport::Utils.include_p?(note['type']), note['type'], level)
+          end
+        }
     else
         xml.send(note['type'], atts) {
           if head_text
