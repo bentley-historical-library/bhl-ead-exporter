@@ -442,7 +442,7 @@ class BHLEADSerializer < ASpaceExport::Serializer
 
       serialize_indexes(data, xml, fragments)
 
-      serialize_controlaccess(data, xml, fragments)
+      #serialize_controlaccess(data, xml, fragments)
 
       EADSerializer.run_serialize_step(data, xml, fragments, :archdesc)
 
