@@ -442,7 +442,7 @@ class BHLEADSerializer < ASpaceExport::Serializer
 
       serialize_indexes(data, xml, fragments)
 
-      serialize_controlaccess(data, xml, fragments)
+      #serialize_controlaccess(data, xml, fragments)
 
       EADSerializer.run_serialize_step(data, xml, fragments, :archdesc)
 
@@ -631,7 +631,7 @@ class BHLEADSerializer < ASpaceExport::Serializer
       if n == 1 && inst['instance_type']
         atts[:label] = I18n.t("enumerations.instance_instance_type.#{inst['instance_type']}", :default => inst['instance_type'])
       else
-        atts[:label] = inst['container']["type_#{n}"]
+        atts[:label] = inst['container']["type_#{n}"].capitalize
       end
       xml.container(atts) {
          sanitize_mixed_content(text, xml, fragments)  
