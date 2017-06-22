@@ -1,7 +1,7 @@
 class BHLDigitizationModel < EADModel
-	model_for :bhl_digitization
+  model_for :bhl_digitization
 
-	include ASpaceExport::ArchivalObjectDescriptionHelpers
+  include ASpaceExport::ArchivalObjectDescriptionHelpers
   include ASpaceExport::LazyChildEnumerations
 
   @data_src = Class.new do
@@ -31,19 +31,28 @@ class BHLDigitizationModel < EADModel
     include ASpaceExport::ArchivalObjectDescriptionHelpers
     include ASpaceExport::LazyChildEnumerations
 
+    def self.prefetch(tree_nodes, repo_id)
+      RequestContext.open(:repo_id => repo_id) do
+        objs = ArchivalObject.sequel_to_jsonmodel(ArchivalObject.filter(:id => tree_nodes.map {|tree| tree['id']}).order(:position).all)
+        URIResolver.resolve_references(objs, ['subjects', 'linked_agents', 'digital_object', 'top_container'])
+      end
+    end
 
-    def initialize(tree, repo_id)
+    def self.from_prefetched(tree, rec, repo_id)
+      new(tree, repo_id, rec)
+    end
+
+    def initialize(tree, repo_id, prefetched_rec = nil)
       @repo_id = repo_id
       # @tree = tree
       @children = tree ? tree['children'] : []
       @child_class = self.class
       @json = nil
       RequestContext.open(:repo_id => repo_id) do
-        rec = URIResolver.resolve_references(ArchivalObject.to_jsonmodel(tree['id']), ['subjects', 'linked_agents', 'digital_object'])
+        rec = prefetched_rec || URIResolver.resolve_references(ArchivalObject.to_jsonmodel(tree['id']), ['subjects', 'linked_agents', 'digital_object', 'top_container'])
         @json = JSONModel::JSONModel(:archival_object).new(rec)
       end
     end
-
 
     def method_missing(meth, *args)
       if @json.respond_to?(meth)
@@ -51,6 +60,20 @@ class BHLDigitizationModel < EADModel
       else
         nil
       end
+    end
+
+    def creators_and_sources
+      self.linked_agents.select{|link| ['creator', 'source'].include?(link['role']) }
+    end
+
+
+    def instances_with_sub_containers
+      self.instances.select{|inst| inst['sub_container']}.compact
+    end
+
+
+    def instances_with_digital_objects
+      self.instances.select{|inst| inst['digital_object']}.compact
     end
   end
 
@@ -86,6 +109,11 @@ class BHLDigitizationModel < EADModel
 
   def include_unpublished?
     @include_unpublished
+  end
+
+
+  def include_daos?
+    @include_daos
   end
 
 
@@ -145,8 +173,13 @@ class BHLDigitizationModel < EADModel
   end
 
 
-  def instances_with_containers
-    self.instances.select{|inst| inst['container']}.compact
+  def instances_with_sub_containers
+    self.instances.select{|inst| inst['sub_container']}.compact
+  end
+
+
+  def instances_with_digital_objects
+    self.instances.select{|inst| inst['digital_object']}.compact
   end
 
 

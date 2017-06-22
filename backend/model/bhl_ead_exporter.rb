@@ -1,8 +1,8 @@
+# encoding: utf-8
 require 'nokogiri'
 require 'securerandom'
 
 require_relative 'lib/descgrp_types'
-require_relative 'lib/resolve_classifications'
 require_relative 'lib/singularize_extents'
 
 class BHLEADSerializer < ASpaceExport::Serializer
@@ -44,6 +44,8 @@ class BHLEADSerializer < ASpaceExport::Serializer
 
 
   def handle_linebreaks(content)
+    # 4archon... 
+    content.gsub!("\n\t", "\n\n")  
     # if there's already p tags, just leave as is
     return content if ( content.strip =~ /^<p(\s|\/|>)/ or content.strip.length < 1 )
     original_content = content
@@ -53,7 +55,7 @@ class BHLEADSerializer < ASpaceExport::Serializer
     else
       content = "<p>#{content.strip}</p>"
     end
-   
+
     # first lets see if there are any &
     # note if there's a &somewordwithnospace , the error is EntityRef and wont
     # be fixed here...
@@ -62,16 +64,24 @@ class BHLEADSerializer < ASpaceExport::Serializer
     end
 
     # in some cases adding p tags can create invalid markup with mixed content
-    # just return the original content if there's still problems 
-    xml_errors(content).any? ? original_content : content 
+    # just return the original content if there's still problems
+    xml_errors(content).any? ? original_content : content
   end
 
   def strip_p(content)
     content.gsub("<p>", "").gsub("</p>", "").gsub("<p/>", '')
   end
 
+  def remove_smart_quotes(content)
+    content = content.gsub(/\xE2\x80\x9C/, '"').gsub(/\xE2\x80\x9D/, '"').gsub(/\xE2\x80\x98/, "\'").gsub(/\xE2\x80\x99/, "\'")
+  end
+
   def sanitize_mixed_content(content, context, fragments, allow_p = false  )
 #    return "" if content.nil? 
+
+    # remove smart quotes from text
+    content = remove_smart_quotes(content)
+
     # br's should be self closing 
     content = content.gsub("<br>", "<br/>").gsub("</br>", '')
     # lets break the text, if it has linebreaks but no p tags.  
@@ -97,110 +107,12 @@ class BHLEADSerializer < ASpaceExport::Serializer
       context.cdata content
     end
   end
-
-  def make_abstract_addition(data, xml, fragments)
-    links_hash = make_links_hash(data, xml, fragments)
-    abstract_additions = []
-
-    access_systems = {:deepblue => "Deep Blue", 
-                      :bdml => "the Bentley Digital Media Library", 
-                      :imagebank => "the Bentley Image Bank", 
-                      :archive_it => "the Bentley Historical Library's web archives",
-                      :polarbear => "the Polar Bear Expedition Digital Collections",
-                      :internet_archive => "the Internet Archive",
-                      :parsons => "the Jeffrey R. Parsons Archaeological Sites Images collection"}
-
-    for access_system in access_systems.keys
-      if links_hash.has_key?(access_system)
-        link = links_hash[access_system]
-        link_text = access_systems[access_system]
-        abstract_additions << '<title actuate="onrequest" show="new" href="' + link + '">' + link_text + '</title>'
-      end
-    end
-  
-    if not abstract_additions.empty?
-      abstract_addition = "Digital materials from this collection can be found in " + abstract_additions.join(", ")
-    else
-      abstract_addition = false
-    end
-
-    abstract_addition
-  end
-
-  def make_links_hash(data, xml, fragments)
-    links_hash = {}
-
-    data.instances.each do |inst|
-      if inst.has_key?("digital_object") && !inst["digital_object"]["_resolved"].nil?
-        digital_object = inst["digital_object"]["_resolved"]
-        file_version = digital_object["file_versions"][0]
-        file_uri = file_version["file_uri"]
-        links_hash[:deepblue] = file_uri
-      end
-    end
-
-    access_systems = {"polarbear" => :polarbear, 
-                      "hdl.handle.net/2027.42" => :deepblue, 
-                      "archive-it.org" => :archive_it, 
-                      "mivideo" => :bdml, 
-                      "quod.lib.umich.edu/cgi/i/image" => :imagebank,
-                      "quod.lib.umich.edu/b/bhl?" => :imagebank,
-                      "quod.lib.umich.edu/b/bhl3ic?" => :parsons,
-                      "web.archive.org" => :internet_archive}
-
-    access_system_urls = {:polarbear => "http://quod.lib.umich.edu/p/polaread", 
-                          :deepblue => "https://deepblue.lib.umich.edu/documents", 
-                          :archive_it => "https://archive-it.org/organizations/934", 
-                          :bdml => "https://bentley.mivideo.it.umich.edu", 
-                          :imagebank => "https://quod.lib.umich.edu/b/bhl?cc=bhl;page=index;c=bhl",
-                          :internet_archive => "http://archive.org/web/",
-                          :parsons => "https://quod.lib.umich.edu/b/bhl3ic?page=index"}
-
-    links = make_links_array(data, xml, fragments)
-
-    for link in links
-      for access_system in access_systems.keys
-        access_system_key = access_systems[access_system]
-        access_system_url = access_system_urls[access_system_key]
-        if link.include?(access_system) and not links_hash.has_key?(access_system_key)
-          links_hash[access_system_key] = access_system_url
-        end
-      end
-    end
-
-    links_hash
-
-  end
-
-  def make_links_array(data, xml, fragments)
-    links = []
-
-    data.instances.each do |inst|
-      if inst.has_key?("digital_object") && !inst["digital_object"]["_resolved"].nil?
-        digital_object = inst["digital_object"]["_resolved"]
-        file_version = digital_object["file_versions"][0]
-        file_uri = file_version["file_uri"]
-        links << file_uri
-      end
-    end
-
-    data.children_indexes.each do |i|
-      #@stream_handler.buffer { |xml, new_fragments| }
-        child_links = make_links_array(data.get_child(i), xml, fragments)
-        for link in child_links
-          if not links.include?(link)
-            links << link
-          end
-        end
-    end
-
-    links
-  end
   
   def stream(data)
     @stream_handler = ASpaceExport::StreamHandler.new
     @fragments = ASpaceExport::RawXMLHandler.new
     @include_unpublished = data.include_unpublished?
+    @include_daos = data.include_daos?
     @use_numbered_c_tags = data.use_numbered_c_tags?
     @id_prefix = I18n.t('archival_object.ref_id_export_prefix', :default => 'aspace_')
 
@@ -209,7 +121,13 @@ class BHLEADSerializer < ASpaceExport::Serializer
       # MODIFICATION: Added doctype and removed namespaces
       xml.doc.create_internal_subset('ead',"+//ISBN 1-931666-00-8//DTD ead.dtd (Encoded Archival Description (EAD) Version 2002)//EN","ead.dtd")
       
-      xml.ead {
+      ead_attributes = {}
+
+      if data.publish === false
+        ead_attributes['audience'] = 'internal'
+      end
+
+      xml.ead( ead_attributes ) {
 
         xml.text (
           @stream_handler.buffer { |xml, new_fragments|
@@ -219,19 +137,7 @@ class BHLEADSerializer < ASpaceExport::Serializer
           })
 
         atts = {:level => data.level, :otherlevel => data.other_level}
-
-        if data.publish === false
-          if @include_unpublished
-            atts[:audience] = 'internal'
-          else
-            return
-          end
-        end
-
-        atts.reject! {|k, v| v.nil?}
-
-
-        
+        atts.reject! {|k, v| v.nil?}        
 
         xml.archdesc(atts) {
             
@@ -270,36 +176,35 @@ class BHLEADSerializer < ASpaceExport::Serializer
             xml.unitid(:type => 'call number') { xml.text (0..3).map{|i| data.send("id_#{i}")}.compact.join('.')}
 
             serialize_extents(data, xml, @fragments, level="resource")
-
             serialize_dates(data, xml, @fragments)
-
              # MODIFICATION: Set serialize_x_notes levels to resource so that extptrs are added to accessrestrict and processinfo
-
-
             serialize_did_notes(data, xml, @fragments, level="resource")
 
-            # MODIFICATION: Don't serialize resource level containers
-            #data.instances_with_containers.each do |instance|
+            # MODIFICATION: Don't serialize resource level containers or digital objects
+            #data.instances_with_sub_containers.each do |instance|
               #serialize_container(instance, xml, @fragments)
             #end
 
             EADSerializer.run_serialize_step(data, xml, @fragments, :did)
 
           }# </did>
-            
-          data.digital_objects.each do |dob|
-                serialize_digital_object(dob, xml, @fragments)
-          end
 
+          #data.digital_objects.each do |dob|
+            #serialize_digital_object(dob, xml, @fragments)
+          #end
+            
           # MODIFICATION: Serialize <descgrp type="admin">
 
           uarp_classification = false
 
-          data.classifications.each do |classification|
-            classification_ref = classification['ref']
-            classification_identifier = resolve_classification(classification_ref)
-            if classification_identifier == "UA"
-              uarp_classification = true
+          unless data.user_defined.nil?
+            [1, 2, 3].each do |i|
+              if data.user_defined.has_key?("enum_#{i}") and not data.user_defined["enum_#{i}"].nil?
+                classification = data.user_defined["enum_#{i}"]
+                if classification == "UA"
+                  uarp_classification = true
+                end
+              end
             end
           end
 
@@ -382,6 +287,7 @@ class BHLEADSerializer < ASpaceExport::Serializer
   def serialize_child(data, xml, fragments, c_depth = 1)
     begin 
     return if data["publish"] === false && !@include_unpublished
+    return if data["suppressed"] === true
 
     tag_name = @use_numbered_c_tags ? :"c#{c_depth.to_s.rjust(2, '0')}" : :c
 
@@ -418,14 +324,17 @@ class BHLEADSerializer < ASpaceExport::Serializer
         has_physical_instance = false
         has_digital_instance = false
 
-        data.instances.each do |inst|
-          case 
-          when inst.has_key?('container') && !inst['container'].nil?
-            serialize_container(inst, xml, fragments)
-            has_physical_instance = true
-          when inst.has_key?('digital_object') && !inst['digital_object']['_resolved'].nil?
-            serialize_digital_object(inst['digital_object']['_resolved'], xml, fragments)
-            has_digital_instance = true
+        if data.instances_with_sub_containers.length > 0
+          has_physical_instance = true
+          data.instances_with_sub_containers.each do |instance|
+            serialize_container(instance, xml, @fragments)
+          end
+        end
+
+        if @include_daos && data.instances_with_digital_objects.length > 0
+          has_digital_instance = true
+          data.instances_with_digital_objects.each do |instance|
+            serialize_digital_object(instance["digital_object"]["_resolved"], xml, fragments)
           end
         end
 
@@ -472,13 +381,14 @@ class BHLEADSerializer < ASpaceExport::Serializer
         sort_name = agent['display_name']['sort_name']
         rules = agent['display_name']['rules']
         source = agent['display_name']['source']
+        authfilenumber = agent['display_name']['authority_id']
         node_name = case agent['agent_type']
                     when 'agent_person'; 'persname'
                     when 'agent_family'; 'famname'
                     when 'agent_corporate_entity'; 'corpname'
                     end
         xml.origination(:label => role) {
-         atts = {:role => relator, :source => source, :rules => rules}
+         atts = {:role => relator, :source => source, :rules => rules, :authfilenumber => authfilenumber}
          atts.reject! {|k, v| v.nil?}
 
           xml.send(node_name, atts) {
@@ -604,43 +514,70 @@ class BHLEADSerializer < ASpaceExport::Serializer
   end
 
   def serialize_container(inst, xml, fragments)
-    containers = []
-    @parent_id = nil 
-    (1..3).each do |n|
+    atts = {}
+
+    sub = inst['sub_container']
+    top = sub['top_container']['_resolved']
+
+    #atts[:id] = top_id
+    #last_id = atts[:id]
+
+    top_type = top['type']
+
+    if top_type.include?("Roll")
+      top_top = "reel"
+    elsif top_type.include?("Con.") or top_type.include?("No.")
+      top_type = "othertype"
+    else
+      top_type = top_type.downcase
+    end
+
+    atts[:type] = top_type
+    text = top['indicator']
+
+    atts[:label] = I18n.t("enumerations.instance_instance_type.#{inst['instance_type']}", :default => inst['instance_type'])
+    #atts[:label] << " [#{top['barcode']}]" if top['barcode']
+
+    #if (cp = top['container_profile'])
+      #atts[:altrender] = cp['_resolved']['url'] || cp['_resolved']['name']
+    #end
+
+    xml.container(atts) {
+      sanitize_mixed_content(text, xml, fragments)
+    }
+
+    (2..3).each do |n|
       atts = {}
-      next unless inst['container'].has_key?("type_#{n}") && inst['container'].has_key?("indicator_#{n}")
-      @container_id = prefix_id(SecureRandom.hex) 
-      
-      # MODIFICATION: Comment out container parent and id attributes.
-      #atts[:parent] = @parent_id unless @parent_id.nil? 
-      #atts[:id] = @container_id 
-      @parent_id = @container_id 
 
-      if inst['container']["type_#{n}"].include?("Roll")
-        container_type = "reel"
-      elsif inst['container']["type_#{n}"].include?("Con.") or inst['container']["type_#{n}"].include?("No.")
-        container_type = "othertype"
+      next unless sub["type_#{n}"]
+
+      #atts[:id] = prefix_id(SecureRandom.hex)
+      #atts[:parent] = last_id
+      #last_id = atts[:id]
+
+      sub_type = sub["type_#{n}"]
+      if sub_type.include?("Roll")
+        sub_top = "reel"
+      elsif sub_type.include?("Con.") or sub_type.include?("No.")
+        sub_type = "othertype"
       else
-        container_type = inst['container']["type_#{n}"].downcase
+        sub_type = top_type.downcase
       end
 
-      text = inst['container']["indicator_#{n}"]
+      atts[:type] = sub_type
+      atts[:label] = sub_type.capitalize
+      text = sub["indicator_#{n}"]
 
-      atts[:type] = container_type.downcase
-
-      if n == 1 && inst['instance_type']
-        atts[:label] = I18n.t("enumerations.instance_instance_type.#{inst['instance_type']}", :default => inst['instance_type'])
-      else
-        atts[:label] = inst['container']["type_#{n}"].capitalize
-      end
       xml.container(atts) {
-         sanitize_mixed_content(text, xml, fragments)  
+        sanitize_mixed_content(text, xml, fragments)
       }
     end
   end
 
   def serialize_digital_object(digital_object, xml, fragments)
     return if digital_object["publish"] === false && !@include_unpublished
+    return if digital_object["suppressed"] === true
+
     file_versions = digital_object['file_versions']
     digital_object_notes = digital_object['notes']
     title = digital_object['title']
@@ -760,13 +697,6 @@ class BHLEADSerializer < ASpaceExport::Serializer
       if note['type'] == 'abstract' && level == 'child'
         content = "(#{content.strip})"
       end
-
-      #if note['type'] == 'abstract' && level == 'resource'
-        #abstract_addition = make_abstract_addition(data, xml, fragments)
-        #if abstract_addition
-          #content += "<lb/>#{abstract_addition}"
-        #end
-      #end
 
       att = { :id => prefix_id(note['persistent_id']) }.reject {|k,v| v.nil? || v.empty? || v == "null" } 
       att ||= {}

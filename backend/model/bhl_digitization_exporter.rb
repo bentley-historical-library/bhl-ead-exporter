@@ -1,8 +1,8 @@
+# encoding: utf-8
 require 'nokogiri'
 require 'securerandom'
 
 require_relative 'lib/descgrp_types'
-require_relative 'lib/resolve_classifications'
 require_relative 'lib/singularize_extents'
 
 class BHLDigitizationSerializer < ASpaceExport::Serializer
@@ -33,9 +33,21 @@ class BHLDigitizationSerializer < ASpaceExport::Serializer
     end 
   end
  
+  def xml_errors(content)
+    # there are message we want to ignore. annoying that java xml lib doesn't
+    # use codes like libxml does...
+    ignore = [ /Namespace prefix .* is not defined/, /The prefix .* is not bound/  ] 
+    ignore = Regexp.union(ignore) 
+    # the "wrap" is just to ensure that there is a psuedo root element to eliminate a "false" error
+    Nokogiri::XML("<wrap>#{content}</wrap>").errors.reject { |e| e.message =~ ignore  }
+  end 
+
+
   def handle_linebreaks(content)
-    # if there's already p tags, just leave as is 
-    return content if ( content.strip =~ /^<p(\s|\/|>)/ or content.strip.length < 1 ) 
+    # 4archon... 
+    content.gsub!("\n\t", "\n\n")  
+    # if there's already p tags, just leave as is
+    return content if ( content.strip =~ /^<p(\s|\/|>)/ or content.strip.length < 1 )
     original_content = content
     blocks = content.split("\n\n").select { |b| !b.strip.empty? }
     if blocks.length > 1
@@ -43,18 +55,33 @@ class BHLDigitizationSerializer < ASpaceExport::Serializer
     else
       content = "<p>#{content.strip}</p>"
     end
+
+    # first lets see if there are any &
+    # note if there's a &somewordwithnospace , the error is EntityRef and wont
+    # be fixed here...
+    if xml_errors(content).any? { |e| e.message.include?("The entity name must immediately follow the '&' in the entity reference.") }
+      content.gsub!("& ", "&amp; ")
+    end
+
     # in some cases adding p tags can create invalid markup with mixed content
-    # the "wrap" is just to ensure that there is a psuedo root element to eliminate a "false" error
-    content = original_content if Nokogiri::XML("<wrap>#{content}</wrap>").errors.any?
-    content
+    # just return the original content if there's still problems
+    xml_errors(content).any? ? original_content : content
   end
 
   def strip_p(content)
     content.gsub("<p>", "").gsub("</p>", "").gsub("<p/>", '')
   end
 
+  def remove_smart_quotes(content)
+    content = content.gsub(/\xE2\x80\x9C/, '"').gsub(/\xE2\x80\x9D/, '"').gsub(/\xE2\x80\x98/, "\'").gsub(/\xE2\x80\x99/, "\'")
+  end
+
   def sanitize_mixed_content(content, context, fragments, allow_p = false  )
 #    return "" if content.nil? 
+
+    # remove smart quotes from text
+    content = remove_smart_quotes(content)
+
     # br's should be self closing 
     content = content.gsub("<br>", "<br/>").gsub("</br>", '')
     # lets break the text, if it has linebreaks but no p tags.  
@@ -86,6 +113,7 @@ class BHLDigitizationSerializer < ASpaceExport::Serializer
     @stream_handler = ASpaceExport::StreamHandler.new
     @fragments = ASpaceExport::RawXMLHandler.new
     @include_unpublished = data.include_unpublished?
+    @include_daos = data.include_daos?
     @use_numbered_c_tags = data.use_numbered_c_tags?
     @id_prefix = I18n.t('archival_object.ref_id_export_prefix', :default => 'aspace_')
 
@@ -93,8 +121,14 @@ class BHLDigitizationSerializer < ASpaceExport::Serializer
       begin 
       # MODIFICATION: Added doctype and removed namespaces
       xml.doc.create_internal_subset('ead',"+//ISBN 1-931666-00-8//DTD ead.dtd (Encoded Archival Description (EAD) Version 2002)//EN","ead.dtd")
+
+      ead_attributes = {}
+
+      if data.publish === false
+        ead_attributes['audience'] = 'internal'
+      end
       
-      xml.ead {
+      xml.ead( ead_attributes ) {
 
         xml.text (
           @stream_handler.buffer { |xml, new_fragments|
@@ -104,14 +138,6 @@ class BHLDigitizationSerializer < ASpaceExport::Serializer
           })
 
         atts = {:level => data.level, :otherlevel => data.other_level}
-
-        if data.publish === false
-          if @include_unpublished
-            atts[:audience] = 'internal'
-          else
-            return
-          end
-        end
 
         atts.reject! {|k, v| v.nil?}
 
@@ -163,28 +189,31 @@ class BHLDigitizationSerializer < ASpaceExport::Serializer
 
             serialize_did_notes(data, xml, @fragments, level="resource")
 
-            # MODIFICATION: Don't serialize resource level containers
-            #data.instances_with_containers.each do |instance|
+            # MODIFICATION: Don't serialize resource level containers or digital objects
+            #data.instances_with_sub_containers.each do |instance|
               #serialize_container(instance, xml, @fragments)
             #end
 
             EADSerializer.run_serialize_step(data, xml, @fragments, :did)
 
           }# </did>
-            
-          data.digital_objects.each do |dob|
-                serialize_digital_object(dob, xml, @fragments)
-          end
+
+          #data.digital_objects.each do |dob|
+            #serialize_digital_object(dob, xml, @fragments)
+          #end           
 
           # MODIFICATION: Serialize <descgrp type="admin">
 
           uarp_classification = false
 
-          data.classifications.each do |classification|
-            classification_ref = classification['ref']
-            classification_identifier = resolve_classification(classification_ref)
-            if classification_identifier == "UA"
-              uarp_classification = true
+          unless data.user_defined.nil?
+            [1, 2, 3].each do |i|
+              if data.user_defined.has_key?("enum_#{i}") and not data.user_defined["enum_#{i}"].nil?
+                classification = data.user_defined["enum_#{i}"]
+                if classification == "UA"
+                  uarp_classification = true
+                end
+              end
             end
           end
 
@@ -245,6 +274,7 @@ class BHLDigitizationSerializer < ASpaceExport::Serializer
   def serialize_child(data, xml, fragments, c_depth = 1)
     begin 
     return if data["publish"] === false && !@include_unpublished
+    return if data["suppressed"] === true
 
     tag_name = @use_numbered_c_tags ? :"c#{c_depth.to_s.rjust(2, '0')}" : :c
 
@@ -287,14 +317,17 @@ class BHLDigitizationSerializer < ASpaceExport::Serializer
         has_physical_instance = false
         has_digital_instance = false
 
-        data.instances.each do |inst|
-          case 
-          when inst.has_key?('container') && !inst['container'].nil?
-            serialize_container(inst, xml, fragments)
-            has_physical_instance = true
-          when inst.has_key?('digital_object') && !inst['digital_object']['_resolved'].nil?
-            serialize_digital_object(inst['digital_object']['_resolved'], xml, fragments)
-            has_digital_instance = true
+        if data.instances_with_sub_containers.length > 0
+          has_physical_instance = true
+          data.instances_with_sub_containers.each do |instance|
+            serialize_container(instance, xml, @fragments)
+          end
+        end
+
+        if @include_daos && data.instances_with_digital_objects.length > 0
+          has_digital_instance = true
+          data.instances_with_digital_objects.each do |instance|
+            serialize_digital_object(instance["digital_object"]["_resolved"], xml, fragments)
           end
         end
 
@@ -335,13 +368,14 @@ class BHLDigitizationSerializer < ASpaceExport::Serializer
         sort_name = agent['display_name']['sort_name']
         rules = agent['display_name']['rules']
         source = agent['display_name']['source']
+        authfilenumber = agent['display_name']['authority_id']
         node_name = case agent['agent_type']
                     when 'agent_person'; 'persname'
                     when 'agent_family'; 'famname'
                     when 'agent_corporate_entity'; 'corpname'
                     end
         xml.origination(:label => role) {
-         atts = {:role => relator, :source => source, :rules => rules}
+         atts = {:role => relator, :source => source, :rules => rules, :authfilenumber => authfilenumber}
          atts.reject! {|k, v| v.nil?}
 
           xml.send(node_name, atts) {
@@ -467,43 +501,70 @@ class BHLDigitizationSerializer < ASpaceExport::Serializer
   end
 
   def serialize_container(inst, xml, fragments)
-    containers = []
-    @parent_id = nil 
-    (1..3).each do |n|
+    atts = {}
+
+    sub = inst['sub_container']
+    top = sub['top_container']['_resolved']
+
+    #atts[:id] = top_id
+    #last_id = atts[:id]
+
+    top_type = top['type']
+
+    if top_type.include?("Roll")
+      top_top = "reel"
+    elsif top_type.include?("Con.") or top_type.include?("No.")
+      top_type = "othertype"
+    else
+      top_type = top_type.downcase
+    end
+
+    atts[:type] = top_type
+    text = top['indicator']
+
+    atts[:label] = I18n.t("enumerations.instance_instance_type.#{inst['instance_type']}", :default => inst['instance_type'])
+    #atts[:label] << " [#{top['barcode']}]" if top['barcode']
+
+    #if (cp = top['container_profile'])
+      #atts[:altrender] = cp['_resolved']['url'] || cp['_resolved']['name']
+    #end
+
+    xml.container(atts) {
+      sanitize_mixed_content(text, xml, fragments)
+    }
+
+    (2..3).each do |n|
       atts = {}
-      next unless inst['container'].has_key?("type_#{n}") && inst['container'].has_key?("indicator_#{n}")
-      @container_id = prefix_id(SecureRandom.hex) 
-      
-      # MODIFICATION: Comment out container parent and id attributes.
-      #atts[:parent] = @parent_id unless @parent_id.nil? 
-      #atts[:id] = @container_id 
-      @parent_id = @container_id 
 
-      if inst['container']["type_#{n}"].include?("Roll")
-        container_type = "reel"
-      elsif inst['container']["type_#{n}"].include?("Con.") or inst['container']["type_#{n}"].include?("No.")
-        container_type = "othertype"
+      next unless sub["type_#{n}"]
+
+      #atts[:id] = prefix_id(SecureRandom.hex)
+      #atts[:parent] = last_id
+      #last_id = atts[:id]
+
+      sub_type = sub["type_#{n}"]
+      if sub_type.include?("Roll")
+        sub_top = "reel"
+      elsif sub_type.include?("Con.") or sub_type.include?("No.")
+        sub_type = "othertype"
       else
-        container_type = inst['container']["type_#{n}"].downcase
+        sub_type = top_type.downcase
       end
 
-      text = inst['container']["indicator_#{n}"]
+      atts[:type] = sub_type
+      atts[:label] = sub_type.capitalize
+      text = sub["indicator_#{n}"]
 
-      atts[:type] = container_type.downcase
-
-      if n == 1 && inst['instance_type']
-        atts[:label] = I18n.t("enumerations.instance_instance_type.#{inst['instance_type']}", :default => inst['instance_type'])
-      else
-        atts[:label] = inst['container']["type_#{n}"]
-      end
       xml.container(atts) {
-         sanitize_mixed_content(text, xml, fragments)  
+        sanitize_mixed_content(text, xml, fragments)
       }
     end
   end
 
   def serialize_digital_object(digital_object, xml, fragments)
     return if digital_object["publish"] === false && !@include_unpublished
+    return if digital_object["suppressed"] === true
+
     file_versions = digital_object['file_versions']
     digital_object_notes = digital_object['notes']
     title = digital_object['title']
@@ -525,15 +586,13 @@ class BHLDigitizationSerializer < ASpaceExport::Serializer
     atts['title'] = digital_object['title'] if digital_object['title']
         
     #MODIFICATION: Insert original note into <daodesc> instead of the default title
-    daodesc_content = nil
+    daodesc_content = "[access item]"
     
     digital_object_notes.each do |note|
         if note['type'] == 'note'
-            daodesc_content = note['content'][0]
+            daodesc_content = "[#{note['content'][0]}]"
         end
     end
-
-    daodesc_content = "[#{daodesc_content}]" || "[access item]"
     
     
     if file_versions.empty?
@@ -547,7 +606,7 @@ class BHLDigitizationSerializer < ASpaceExport::Serializer
       file_versions.each do |file_version|
         atts['href'] = file_version['file_uri'] || digital_object['digital_object_id']
         # MODIFICATION: downcase xlink_actuate_attribute
-        atts['actuate'] = file_version['xlink_actuate_attribute'].downcase || 'onrequest'
+        atts['actuate'] = file_version['xlink_actuate_attribute'] ? file_version['xlink_actuate_attribute'].downcase : 'onrequest'
         atts['show'] = file_version['xlink_show_attribute'] || 'new'
         xml.dao(atts) {
           xml.daodesc { sanitize_mixed_content(daodesc_content, xml, fragments, true) } if content
