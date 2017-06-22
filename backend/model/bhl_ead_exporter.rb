@@ -181,19 +181,17 @@ class BHLEADSerializer < ASpaceExport::Serializer
             serialize_did_notes(data, xml, @fragments, level="resource")
 
             # MODIFICATION: Don't serialize resource level containers or digital objects
-            #data.instances_with_subcontainers.each do |instance|
+            #data.instances_with_sub_containers.each do |instance|
               #serialize_container(instance, xml, @fragments)
-            #end
-
-            #if @include_daos
-              #data.instances_with_digital_objects.each do |instance|
-                #serialize_digital_object(instance['digital_object']['_resolved'], xml, fragments)
-              #end
             #end
 
             EADSerializer.run_serialize_step(data, xml, @fragments, :did)
 
           }# </did>
+
+          #data.digital_objects.each do |dob|
+            #serialize_digital_object(dob, xml, @fragments)
+          #end
             
           # MODIFICATION: Serialize <descgrp type="admin">
 
@@ -326,14 +324,17 @@ class BHLEADSerializer < ASpaceExport::Serializer
         has_physical_instance = false
         has_digital_instance = false
 
-        data.instances.each do |inst|
-          case 
-          when inst.has_key?('container') && !inst['container'].nil?
-            serialize_container(inst, xml, fragments)
-            has_physical_instance = true
-          when inst.has_key?('digital_object') && !inst['digital_object']['_resolved'].nil? && @include_daos
-            serialize_digital_object(inst['digital_object']['_resolved'], xml, fragments)
-            has_digital_instance = true
+        if data.instances_with_sub_containers.length > 0
+          has_physical_instance = true
+          data.instances_with_sub_containers.each do |instance|
+            serialize_container(instance, xml, @fragments)
+          end
+        end
+
+        if @include_daos && data.instances_with_digital_objects.length > 0
+          has_digital_instance = true
+          data.instances_with_digital_objects.each do |instance|
+            serialize_digital_object(instance["digital_object"]["_resolved"], xml, fragments)
           end
         end
 
