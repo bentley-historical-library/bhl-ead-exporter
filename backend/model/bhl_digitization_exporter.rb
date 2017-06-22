@@ -368,6 +368,7 @@ class BHLDigitizationSerializer < ASpaceExport::Serializer
         sort_name = agent['display_name']['sort_name']
         rules = agent['display_name']['rules']
         source = agent['display_name']['source']
+        authfilenumber = agent['display_name']['authority_id']
         node_name = case agent['agent_type']
                     when 'agent_person'; 'persname'
                     when 'agent_family'; 'famname'
