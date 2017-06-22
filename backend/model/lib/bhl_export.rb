@@ -17,7 +17,7 @@ module BhlExportHelpers
       :include_daos => include_daos,
       :use_numbered_c_tags => use_numbered_c_tags
     }
-    ead = ASpaceExport.model(:ead).from_resource(jsonmodel, resource.tree(:all, mode = :sparse), opts)
+    ead = ASpaceExport.model(:bhl_ead).from_resource(jsonmodel, resource.tree(:all, mode = :sparse), opts)
     ASpaceExport::stream(ead)
   end
 
@@ -33,7 +33,7 @@ module BhlExportHelpers
       :include_daos => include_daos,
       :use_numbered_c_tags => use_numbered_c_tags
     }
-    ead = ASpaceExport.model(:ead).from_resource(jsonmodel, resource.tree(:all, mode = :sparse), opts)
+    ead = ASpaceExport.model(:bhl_digitization).from_resource(jsonmodel, resource.tree(:all, mode = :sparse), opts)
     ASpaceExport::stream(ead)
   end
 
