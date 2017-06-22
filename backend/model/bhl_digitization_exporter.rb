@@ -585,15 +585,13 @@ class BHLDigitizationSerializer < ASpaceExport::Serializer
     atts['title'] = digital_object['title'] if digital_object['title']
         
     #MODIFICATION: Insert original note into <daodesc> instead of the default title
-    daodesc_content = nil
+    daodesc_content = "[access item]"
     
     digital_object_notes.each do |note|
         if note['type'] == 'note'
-            daodesc_content = note['content'][0]
+            daodesc_content = "[#{note['content'][0]}]"
         end
     end
-
-    daodesc_content = "[#{daodesc_content}]" || "[access item]"
     
     
     if file_versions.empty?
@@ -607,7 +605,7 @@ class BHLDigitizationSerializer < ASpaceExport::Serializer
       file_versions.each do |file_version|
         atts['href'] = file_version['file_uri'] || digital_object['digital_object_id']
         # MODIFICATION: downcase xlink_actuate_attribute
-        atts['actuate'] = file_version['xlink_actuate_attribute'].downcase || 'onrequest'
+        atts['actuate'] = file_version['xlink_actuate_attribute'] ? file_version['xlink_actuate_attribute'].downcase : 'onrequest'
         atts['show'] = file_version['xlink_show_attribute'] || 'new'
         xml.dao(atts) {
           xml.daodesc { sanitize_mixed_content(daodesc_content, xml, fragments, true) } if content
