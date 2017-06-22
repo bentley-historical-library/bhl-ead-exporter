@@ -1,14 +1,14 @@
 class BHLDigitizationModel < EADModel
-	model_for :bhl_digitization
+  model_for :bhl_digitization
 
-	include ASpaceExport::ArchivalObjectDescriptionHelpers
+
+  include ASpaceExport::ArchivalObjectDescriptionHelpers
   include ASpaceExport::LazyChildEnumerations
 
   @data_src = Class.new do
     def initialize(json)
       @json = json
     end
-
 
     def method_missing(meth)
       if @json.respond_to?(meth)
@@ -21,9 +21,56 @@ class BHLDigitizationModel < EADModel
     end
   end
 
-
   def self.data_src(json)
     @data_src.new(json)
+  end
+
+
+  # For a given set of ArchivalObject IDs attempt to pull the records from Solr.
+  # If they're in there and are up-to-date, this saves us hitting the database.
+  #
+  # In the future we might want to generalize this to other record types and use
+  # it elsewhere, but for now I'll let it incubate here :)
+  #
+  class IndexedArchivalObjectPrefetcher
+    RecordVersion = Struct.new(:id, :lock_version)
+
+    def fetch(ao_ids, resolve)
+      # For each record of interest, calculate its URI and obtain its latest lock_version.
+      uri_to_version = {}
+
+      ArchivalObject.filter(:id => ao_ids).select(:id, :lock_version).each do |row|
+        uri = ArchivalObject.uri_for(:archival_object, row[:id])
+        uri_to_version[uri] = RecordVersion.new(row[:id], row[:lock_version])
+      end
+
+      # Try the search index
+      results = Search.records_for_uris(uri_to_version.keys)
+      indexed_records = results['results'].map {|result| ASUtils.json_parse(result['json'])}
+
+      # Walk through our results and throw out any that aren't up-to-date
+      good_records = []
+      indexed_records.each do |indexed|
+        desired_version = uri_to_version.fetch(indexed['uri']).lock_version
+        indexed_version = indexed['lock_version']
+
+        if desired_version == indexed_version
+          good_records << indexed
+        end
+      end
+
+      uris_needing_refetch = uri_to_version.keys - (good_records.map {|json| json['uri']})
+
+      unless uris_needing_refetch.empty?
+        # We've got some records that weren't available in the index.  Plan B...
+        ids_needing_refetch = uris_needing_refetch.map {|uri| uri_to_version[uri][:id]}
+
+        objs = ArchivalObject.sequel_to_jsonmodel(ArchivalObject.filter(:id => ids_needing_refetch).all)
+        good_records.concat(URIResolver.resolve_references(objs, resolve))
+      end
+
+      good_records.sort_by {|record| record.fetch('position')}
+    end
   end
 
 
@@ -32,14 +79,29 @@ class BHLDigitizationModel < EADModel
     include ASpaceExport::LazyChildEnumerations
 
 
-    def initialize(tree, repo_id)
+    def self.prefetch(tree_nodes, repo_id)
+      resolve = ['subjects', 'linked_agents', 'digital_object', 'top_container']
+
+      RequestContext.open(:repo_id => repo_id) do
+        # NOTE: We assume that the above `resolve` properties have also been
+        # resolved by the indexer.
+        IndexedArchivalObjectPrefetcher.new.fetch(tree_nodes.map {|tree| tree['id']},
+                                                  resolve)
+      end
+    end
+
+    def self.from_prefetched(tree, rec, repo_id)
+      new(tree, repo_id, rec)
+    end
+
+    def initialize(tree, repo_id, prefetched_rec = nil)
       @repo_id = repo_id
       # @tree = tree
       @children = tree ? tree['children'] : []
       @child_class = self.class
       @json = nil
       RequestContext.open(:repo_id => repo_id) do
-        rec = URIResolver.resolve_references(ArchivalObject.to_jsonmodel(tree['id']), ['subjects', 'linked_agents', 'digital_object'])
+        rec = prefetched_rec || URIResolver.resolve_references(ArchivalObject.to_jsonmodel(tree['id']), ['subjects', 'linked_agents', 'digital_object', 'top_container'])
         @json = JSONModel::JSONModel(:archival_object).new(rec)
       end
     end
@@ -52,24 +114,39 @@ class BHLDigitizationModel < EADModel
         nil
       end
     end
+
+    def creators_and_sources
+      self.linked_agents.select{|link| ['creator', 'source'].include?(link['role']) }
+    end
+
+
+    def instances_with_sub_containers
+      self.instances.select{|inst| inst['sub_container']}.compact
+    end
+
+
+    def instances_with_digital_objects
+      self.instances.select{|inst| inst['digital_object']}.compact
+    end
   end
 
 
-  def initialize(obj, opts)
+  def initialize(obj, tree, opts)
     @json = obj
     opts.each do |k, v|
       self.instance_variable_set("@#{k}", v)
     end
+
     repo_ref = obj.repository['ref']
     @repo_id = JSONModel::JSONModel(:repository).id_for(repo_ref)
     @repo = Repository.to_jsonmodel(@repo_id)
-    @children = @json.tree['_resolved']['children']
+    @children = tree['children']
     @child_class = self.class.instance_variable_get(:@ao)
   end
 
 
-  def self.from_resource(obj, opts)
-    self.new(obj, opts)
+  def self.from_resource(obj, tree, opts)
+    self.new(obj, tree, opts)
   end
 
 
@@ -88,6 +165,9 @@ class BHLDigitizationModel < EADModel
     @include_unpublished
   end
 
+  def include_daos?
+    @include_daos
+  end
 
   def use_numbered_c_tags?
     @use_numbered_c_tags
@@ -145,10 +225,13 @@ class BHLDigitizationModel < EADModel
   end
 
 
-  def instances_with_containers
-    self.instances.select{|inst| inst['container']}.compact
+  def instances_with_sub_containers
+    self.instances.select{|inst| inst['sub_container']}.compact
   end
 
+  def instances_with_digital_objects
+    self.instances.select{|inst| inst['digital_object']}.compact
+  end
 
   def creators_and_sources
     self.linked_agents.select{|link| ['creator', 'source'].include?(link['role']) }
