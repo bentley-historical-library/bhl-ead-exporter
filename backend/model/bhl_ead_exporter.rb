@@ -557,15 +557,18 @@ class BHLEADSerializer < ASpaceExport::Serializer
 
       sub_type = sub["type_#{n}"]
       if sub_type.include?("Roll")
-        sub_top = "reel"
+        sub_label = sub_type
+        sub_type = "reel"
       elsif sub_type.include?("Con.") or sub_type.include?("No.")
+        sub_label = sub_type
         sub_type = "othertype"
       else
-        sub_type = top_type.downcase
+        sub_label = sub_type.capitalize
+        sub_type = sub_type.downcase
       end
 
       atts[:type] = sub_type
-      atts[:label] = sub_type.capitalize
+      atts[:label] = sub_label
       text = sub["indicator_#{n}"]
 
       xml.container(atts) {
