@@ -114,6 +114,7 @@ class BHLEADSerializer < ASpaceExport::Serializer
     @include_unpublished = data.include_unpublished?
     @include_daos = data.include_daos?
     @use_numbered_c_tags = data.use_numbered_c_tags?
+    @contains_university_restrictions = data.contains_university_restrictions?
     @id_prefix = I18n.t('archival_object.ref_id_export_prefix', :default => 'aspace_')
 
     doc = Nokogiri::XML::Builder.new(:encoding => "UTF-8") do |xml|
@@ -742,21 +743,23 @@ class BHLEADSerializer < ASpaceExport::Serializer
                     serialize_subnotes(note['subnotes'], xml, fragments, ASpaceExport::Utils.include_p?(note['type']), note['type'], level)
                 end
 
-                uarpacc_exists = false
-                note['subnotes'].each do |sn|
-                  if sn['content'] && sn['content'].include?('uarpacc')
-                    uarpacc_exists = true
+                if @contains_university_restrictions
+                  uarpacc_exists = false
+                  note['subnotes'].each do |sn|
+                    if sn['content'] && sn['content'].include?('uarpacc')
+                      uarpacc_exists = true
+                    end
                   end
-                end
 
-                if uarp_classification and not uarpacc_exists  
-                  xml.p {
-                      xml.extptr( {
-                                  "href"=>"uarpacc",
-                                  "show"=>"embed",
-                                  "actuate"=>"onload"
-                                  } )
-                      }
+                  if !uarpacc_exists
+                    xml.p {
+                        xml.extptr( {
+                                    "href"=>"uarpacc",
+                                    "show"=>"embed",
+                                    "actuate"=>"onload"
+                                    } )
+                        }
+                  end
                 end
                 }
         elsif level == 'child'
