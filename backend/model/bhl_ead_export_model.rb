@@ -120,6 +120,11 @@ class BHLEADModel < EADModel
   def use_numbered_c_tags?
     @use_numbered_c_tags
   end
+  
+
+  def contains_university_restrictions?
+    @contains_university_restrictions
+  end
 
 
   def mainagencycode
