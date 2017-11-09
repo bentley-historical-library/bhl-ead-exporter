@@ -23,15 +23,15 @@ module BhlExportHelpers
   end
 
   def contains_university_restrictions(resource_id)
-    restriction_counts = Resource.filter(:id => resource_id).
-                          select(
-                            Sequel.as(Sequel.lit('CountAccessrestrictByType(resource.id, "pr")'), :PR),
-                            Sequel.as(Sequel.lit('CountAccessrestrictByType(resource.id, "sr")'), :SR),
-                            Sequel.as(Sequel.lit('CountAccessrestrictByType(resource.id, "er")'), :ER),
-                            Sequel.as(Sequel.lit('CountAccessrestrictByType(resource.id, "cr")'), :CR)
-                            ).first
+    university_restrictions = ArchivalObject.filter(:root_record_id => resource_id).
+                          left_outer_join(:note, :archival_object_id => Sequel.qualify(:archival_object, :id)).
+                          where(Sequel.lit('LOWER(CONVERT(note.notes using utf8)) LIKE "%accessrestrict%"')).
+                          where(Sequel.lit('LOWER(CONVERT(note.notes using utf8)) LIKE "%sr restrict%" 
+                            OR LOWER(CONVERT(note.notes using utf8)) LIKE "%pr restrict%" 
+                            OR LOWER(CONVERT(note.notes using utf8)) LIKE "%er restrict%" 
+                            OR LOWER(CONVERT(note.notes using utf8)) LIKE "%cr restrict%"')).count
 
-    if (restriction_counts[:PR] > 0) or (restriction_counts[:SR] > 0) or (restriction_counts[:ER] > 0) or (restriction_counts[:CR] > 0)
+    if university_restrictions > 0
       true
     else
       false
