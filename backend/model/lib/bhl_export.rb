@@ -5,7 +5,7 @@ module BhlExportHelpers
 
   ASpaceExport::init
 
-  def generate_bhl_ead(id, include_unpublished, include_daos, use_numbered_c_tags)
+  def generate_bhl_ead(id, include_unpublished, include_daos, use_numbered_c_tags, ead3)
     resolve = ['repository', 'linked_agents', 'subjects', 'digital_object', 'top_container', 'top_container::container_profile']
 
     resource = Resource.get_or_die(id)
@@ -16,8 +16,14 @@ module BhlExportHelpers
       :include_unpublished => include_unpublished,
       :include_daos => include_daos,
       :use_numbered_c_tags => use_numbered_c_tags,
+      :ead3 => ead3,
       :contains_university_restrictions => contains_university_restrictions(id)
     }
+
+    if ead3
+      opts[:serializer] = :ead3
+    end
+
     ead = ASpaceExport.model(:bhl_ead).from_resource(jsonmodel, resource.tree(:all, mode = :sparse), opts)
     ASpaceExport::stream(ead)
   end
