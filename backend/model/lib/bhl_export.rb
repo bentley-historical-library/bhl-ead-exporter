@@ -22,9 +22,12 @@ module BhlExportHelpers
 
     if ead3
       opts[:serializer] = :ead3
+      model = :ead
+    else
+      model = :bhl_ead
     end
 
-    ead = ASpaceExport.model(:bhl_ead).from_resource(jsonmodel, resource.tree(:all, mode = :sparse), opts)
+    ead = ASpaceExport.model(model).from_resource(jsonmodel, resource.tree(:all, mode = :sparse), opts)
     ASpaceExport::stream(ead)
   end
 
