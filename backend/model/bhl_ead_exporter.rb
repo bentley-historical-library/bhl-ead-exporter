@@ -733,7 +733,7 @@ class BHLEADSerializer < ASpaceExport::Serializer
     audatt = note["publish"] === false ? {:audience => 'internal'} : {}
     content = note["content"] 
 
-    atts = {:id => prefix_id(note['persistent_id']) }.reject{|k,v| v.nil? || v.empty? || v == "null" }.merge(audatt)
+    atts = audatt
     
     # MODIFICATION: Only export a head tag if there is a note label to avoid exporting a <head> tag for every single note
     head_text = note['label'] if note['label'] #? note['label'] : I18n.t("enumerations._note_types.#{note['type']}", :default => note['type'])
