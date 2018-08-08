@@ -285,7 +285,7 @@ class BHLEADSerializer < ASpaceExport::Serializer
     end
   end
 
-  def serialize_child(data, xml, fragments, c_depth = 1)
+  def serialize_child(data, xml, fragments, c_depth = 1, inheritable_restriction = false)
     begin 
     return if data["publish"] === false && !@include_unpublished
     return if data["suppressed"] === true
@@ -348,6 +348,13 @@ class BHLEADSerializer < ASpaceExport::Serializer
 
       serialize_nondid_notes(data, xml, fragments, level="child")
 
+      accessrestricts = data.notes.select{|n| n["type"] == "accessrestrict"}
+      if accessrestricts.length > 0
+        inheritable_restriction = accessrestricts[0]
+      elsif inheritable_restriction
+        serialize_note_content(inheritable_restriction, xml, fragments, level="child")
+      end
+
       serialize_bibliographies(data, xml, fragments)
 
       serialize_indexes(data, xml, fragments)
@@ -359,7 +366,7 @@ class BHLEADSerializer < ASpaceExport::Serializer
       data.children_indexes.each do |i|
         xml.text(
                  @stream_handler.buffer {|xml, new_fragments|
-                   serialize_child(data.get_child(i), xml, new_fragments, c_depth + 1)
+                   serialize_child(data.get_child(i), xml, new_fragments, c_depth + 1, inheritable_restriction=inheritable_restriction)
                  }
                  )
       end
