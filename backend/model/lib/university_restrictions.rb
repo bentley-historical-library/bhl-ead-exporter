@@ -1,6 +1,6 @@
 module UniversityRestrictions
 
-	def self.university_restriction_types
+  def self.university_restriction_types
 		%w(CR ER PR SR)
   end
   
@@ -8,7 +8,7 @@ module UniversityRestrictions
     "Access Restrictions for University of Michigan Records"
   end
 
-  def self.boilerplate_start
+  def self.boilerplate_intro
     "University records are public records and once fully processed are generally open to research use. Records that contain personally identifiable information will be restricted in order to protect individual privacy. Certain administrative records are restricted in accordance with university policy as outlined below. The restriction of university records is subject to compliance with applicable laws, including the Michigan Freedom of Information Act."
   end
 

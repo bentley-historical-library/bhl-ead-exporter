@@ -764,7 +764,7 @@ class BHLEADSerializer < ASpaceExport::Serializer
                     xml.p {
                       xml.blockquote {
                         xml.p { xml.emph("render" => "bold") { xml.text(UniversityRestrictions.header_text) } }
-                        xml.p { xml.text(UniversityRestrictions.boilerplate_start) }
+                        xml.p { xml.text(UniversityRestrictions.boilerplate_intro) }
                         xml.p { xml.text("Categories of Restricted Records")
                           xml.list("type" => "simple") {
                             if present_types.include?("PR")
