@@ -752,7 +752,6 @@ class BHLEADSerializer < ASpaceExport::Serializer
                 end
 
                 if @restriction_types.count > 0
-                  xml.restriction_types { xml.text(@restriction_types) }
                   university_restriction_types = UniversityRestrictions.university_restriction_types
                   present_types = []
                   @restriction_types.each do |restriction_type|
