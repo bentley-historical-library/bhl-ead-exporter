@@ -17,7 +17,7 @@ module BhlExportHelpers
       :include_daos => include_daos,
       :use_numbered_c_tags => use_numbered_c_tags,
       :ead3 => ead3,
-      :contains_university_restrictions => contains_university_restrictions(id)
+      :restriction_types => restriction_types(id)
     }
 
     if ead3
@@ -31,20 +31,17 @@ module BhlExportHelpers
     ASpaceExport::stream(ead)
   end
 
-  def contains_university_restrictions(resource_id)
-    university_restrictions = ArchivalObject.filter(:root_record_id => resource_id).
-                          left_outer_join(:note, :archival_object_id => Sequel.qualify(:archival_object, :id)).
-                          where(Sequel.lit('LOWER(CONVERT(note.notes using utf8)) LIKE "%accessrestrict%"')).
-                          where(Sequel.lit('LOWER(CONVERT(note.notes using utf8)) LIKE "%sr restrict%" 
-                            OR LOWER(CONVERT(note.notes using utf8)) LIKE "%pr restrict%" 
-                            OR LOWER(CONVERT(note.notes using utf8)) LIKE "%er restrict%" 
-                            OR LOWER(CONVERT(note.notes using utf8)) LIKE "%cr restrict%"')).count
-
-    if university_restrictions > 0
-      true
-    else
-      false
-    end
+  def restriction_types(resource_id)
+    restriction_types = ArchivalObject.filter(:root_record_id => resource_id).
+                        left_outer_join(:rights_restriction, Sequel.qualify(:rights_restriction, :archival_object_id) => Sequel.qualify(:archival_object, :id)).
+                        left_outer_join(:rights_restriction_type, Sequel.qualify(:rights_restriction_type, :rights_restriction_id) => Sequel.qualify(:rights_restriction, :id)).
+                        select(
+                          Sequel.as(Sequel.lit("GetEnumValue(rights_restriction_type.restriction_type_id)"), :restriction_types)
+                        ).
+                        where(:restriction_type_id).
+                        distinct(:restriction_type_id).
+                        map(:restriction_types)
+    restriction_types
   end
 
   def generate_digitization_ead(id, include_unpublished, include_daos, use_numbered_c_tags)

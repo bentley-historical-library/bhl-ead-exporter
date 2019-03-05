@@ -173,8 +173,8 @@ class BHLEADModel < EADModel
   end
   
 
-  def contains_university_restrictions?
-    @contains_university_restrictions
+  def restriction_types
+    @restriction_types
   end
 
 
