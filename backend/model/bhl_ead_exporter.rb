@@ -4,6 +4,7 @@ require 'securerandom'
 
 require_relative 'lib/descgrp_types'
 require_relative 'lib/singularize_extents'
+require_relative 'lib/university_restrictions'
 
 class BHLEADSerializer < ASpaceExport::Serializer
   serializer_for :bhl_ead
@@ -114,7 +115,7 @@ class BHLEADSerializer < ASpaceExport::Serializer
     @include_unpublished = data.include_unpublished?
     @include_daos = data.include_daos?
     @use_numbered_c_tags = data.use_numbered_c_tags?
-    @contains_university_restrictions = data.contains_university_restrictions?
+    @restriction_types = data.restriction_types
     @id_prefix = I18n.t('archival_object.ref_id_export_prefix', :default => 'aspace_')
 
     doc = Nokogiri::XML::Builder.new(:encoding => "UTF-8") do |xml|
@@ -750,25 +751,43 @@ class BHLEADSerializer < ASpaceExport::Serializer
                     serialize_subnotes(note['subnotes'], xml, fragments, ASpaceExport::Utils.include_p?(note['type']), note['type'], level)
                 end
 
-                if @contains_university_restrictions
-                  uarpacc_exists = false
-                  note['subnotes'].each do |sn|
-                    if sn['content'] && sn['content'].include?('uarpacc')
-                      uarpacc_exists = true
+                if @restriction_types.count > 0
+                  university_restriction_types = UniversityRestrictions.university_restriction_types
+                  present_types = []
+                  @restriction_types.each do |restriction_type|
+                    if university_restriction_types.include?(restriction_type)
+                      present_types << restriction_type
                     end
                   end
 
-                  if !uarpacc_exists
+                  if present_types.count > 0
                     xml.p {
-                        xml.extptr( {
-                                    "href"=>"uarpacc",
-                                    "show"=>"embed",
-                                    "actuate"=>"onload"
-                                    } )
+                      xml.blockquote {
+                        xml.p { xml.emph("render" => "bold") { xml.text(UniversityRestrictions.header_text) } }
+                        xml.p { xml.text(UniversityRestrictions.boilerplate_intro) }
+                        xml.p { xml.text("Categories of Restricted Records")
+                          xml.list("type" => "simple") {
+                            if present_types.include?("PR")
+                              xml.item { sanitize_mixed_content(UniversityRestrictions.pr_restrictions, xml, fragments)}
+                            end
+                            if present_types.include?("SR")
+                              xml.item { sanitize_mixed_content(UniversityRestrictions.sr_restrictions, xml, fragments)}
+                            end
+                            if present_types.include?("CR")
+                              xml.item { sanitize_mixed_content(UniversityRestrictions.cr_restrictions, xml, fragments)}
+                            end
+                            if present_types.include?("ER")
+                              xml.item { sanitize_mixed_content(UniversityRestrictions.er_restrictions, xml, fragments)}
+                            end
+                          }
                         }
+                        xml.p { xml.text(UniversityRestrictions.boilerplate_contents_list)}
+                        xml.p { xml.text(UniversityRestrictions.boilerplate_foia)}
+                      }
+                    }
                   end
                 end
-                }
+              }
         elsif level == 'child'
             xml.accessrestrict(atts) {
                 if head_text
