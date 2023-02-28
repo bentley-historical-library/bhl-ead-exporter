@@ -823,6 +823,7 @@ class BHLEADSerializer < ASpaceExport::Serializer
                 end
             }
         end
+=begin  
     # MODIFICATION: Add digitalproc extptrs to processinfo
     elsif note['type'] == 'processinfo'
         xml.processinfo(atts) {
@@ -851,6 +852,7 @@ class BHLEADSerializer < ASpaceExport::Serializer
                       }
             end
             }
+=end
     elsif note['type'] == "arrangement" && level == "child"
       xml.odd(atts) {
           if head_text
