@@ -37,7 +37,7 @@ module BhlExportHelpers
                         left_outer_join(:rights_restriction, Sequel.qualify(:rights_restriction, :archival_object_id) => Sequel.qualify(:archival_object, :id)).
                         left_outer_join(:rights_restriction_type, Sequel.qualify(:rights_restriction_type, :rights_restriction_id) => Sequel.qualify(:rights_restriction, :id)).
                         select(
-                          Sequel.as(Sequel.lit("GetEnumValue(rights_restriction_type.restriction_type_id)"), :restriction_types)
+                          Sequel.as(Sequel.lit("BHL_GetEnumValue(rights_restriction_type.restriction_type_id)"), :restriction_types)
                         ).
                         where(Sequel.lit('LOWER(CONVERT(note.notes using utf8)) like "%accessrestrict%"')).
                         where(Sequel.qualify(:note, :publish) => 1).
